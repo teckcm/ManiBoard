@@ -599,7 +599,7 @@
   }
 
   function autoPhotoOptions() {
-    var opts = [['0', 'Off'], ['2', '2 min'], ['5', '5 min'], ['15', '15 min'], ['30', '30 min']];
+    var opts = [['0', 'Off'], ['0.5', '30 sec'], ['2', '2 min'], ['5', '5 min'], ['15', '15 min'], ['30', '30 min']];
     var cur = String(+settings.autoPhotoMinutes || 0);
     var known = opts.some(function (o) { return o[0] === cur; });
     if (!known) opts.push([cur, cur + ' min']); // a custom value set in config.js
@@ -618,7 +618,7 @@
       tempUnit: segValue('tempUnit') || 'celsius',
       kenBurns: segValue('kenBurns') !== '0',
       orientation: segValue('orientation') || 'landscape',
-      autoPhotoMinutes: Math.max(0, parseInt(segValue('autoPhotoMinutes'), 10) || 0)
+      autoPhotoMinutes: Math.max(0, parseFloat(segValue('autoPhotoMinutes')) || 0)
     };
     var rotChanged = next.orientation !== (settings.orientation || 'landscape');
     if (next.apiUrl && !/^https:\/\//i.test(next.apiUrl)) { toast('The Apps Script URL should start with https://'); return; }
