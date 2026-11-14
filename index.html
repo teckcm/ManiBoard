@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <title>ManiBoard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="no-photos">
+
+  <!-- Background photo slideshow (two layers that cross-fade) -->
+  <div class="slideshow" aria-hidden="true">
+    <div class="slide" id="slideA"><div class="slide-bg"></div><div class="slide-img"></div></div>
+    <div class="slide" id="slideB"><div class="slide-bg"></div><div class="slide-img"></div></div>
+    <div class="scrim"></div>
+  </div>
+
+  <main class="app" id="app">
+    <section class="left">
+      <header class="hero">
+        <div class="greeting" id="greeting">&nbsp;</div>
+        <div class="clock"><span id="clockTime">--:--</span><span class="ampm" id="clockAmPm"></span></div>
+        <div class="date" id="clockDate">&nbsp;</div>
+        <div class="weather" id="weather" hidden></div>
+      </header>
+
+      <nav class="toolbar" aria-label="Controls">
+        <button class="tool focusable" data-action="photo-mode"><span data-icon="image"></span>Photo mode</button>
+        <button class="tool focusable" data-action="next-photo"><span data-icon="next"></span>Next photo</button>
+        <button class="tool focusable" data-action="refresh"><span data-icon="refresh"></span>Refresh</button>
+        <button class="tool focusable" data-action="settings"><span data-icon="sliders"></span>Settings</button>
+        <span class="status" id="status"></span>
+      </nav>
+    </section>
+
+    <aside class="right">
+      <section class="panel cal-panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Calendar</h2>
+          <span class="panel-sub" id="calSub"></span>
+        </div>
+        <div class="scroll" id="calList"></div>
+      </section>
+
+      <section class="panel todo-panel">
+        <div class="panel-head">
+          <h2 class="panel-title">To-do</h2>
+          <span class="panel-sub" id="todoSub"></span>
+        </div>
+        <div class="scroll" id="todoList"></div>
+        <button class="add-btn focusable" data-action="add-task"><span data-icon="plus"></span>Add task</button>
+      </section>
+    </aside>
+  </main>
+
+  <div class="mini-clock" id="miniClock" aria-hidden="true"></div>
+  <div class="night-dim" id="nightDim" aria-hidden="true"></div>
+  <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
