@@ -36,7 +36,7 @@
     return true;
   }
 
-  function scrollerOf(el) { return el.closest('.scroll'); }
+  function scrollerOf(el) { return el.closest('.scroll, .sheet'); }
 
   // Elements scrolled out of view inside a list may only be reached from inside that same list.
   function reachable(el, cur) {

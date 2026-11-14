@@ -590,10 +590,20 @@
       '<div class="field"><span>Screen</span>' + seg('orientation',
         [['landscape', 'Landscape'], ['portrait-cw', 'Portrait ↻'], ['portrait-ccw', 'Portrait ↺']],
         settings.orientation === 'portrait-cw' || settings.orientation === 'portrait-ccw' ? settings.orientation : 'landscape') +
-      '<div class="hint">For a TV mounted on its side. If the picture is upside down, pick the other portrait option.</div></div>' +
+      '<div class="hint">For a TV on its side. Upside down? Pick the other portrait option.</div></div>' +
+      '<div class="field"><span>Auto photo mode</span>' + seg('autoPhotoMinutes', autoPhotoOptions(), String(+settings.autoPhotoMinutes || 0)) +
+      '<div class="hint">After this long with no button pressed. Any button brings the dashboard back.</div></div>' +
       '<div class="btn-row"><button type="button" class="btn focusable" data-action="close">Cancel</button>' +
       '<button type="button" class="btn primary focusable" data-action="save-settings">Save</button></div>' +
       '</form>');
+  }
+
+  function autoPhotoOptions() {
+    var opts = [['0', 'Off'], ['2', '2 min'], ['5', '5 min'], ['15', '15 min'], ['30', '30 min']];
+    var cur = String(+settings.autoPhotoMinutes || 0);
+    var known = opts.some(function (o) { return o[0] === cur; });
+    if (!known) opts.push([cur, cur + ' min']); // a custom value set in config.js
+    return opts;
   }
 
   function saveSettings() {
@@ -607,7 +617,8 @@
       use24h: segValue('use24h') === '1',
       tempUnit: segValue('tempUnit') || 'celsius',
       kenBurns: segValue('kenBurns') !== '0',
-      orientation: segValue('orientation') || 'landscape'
+      orientation: segValue('orientation') || 'landscape',
+      autoPhotoMinutes: Math.max(0, parseInt(segValue('autoPhotoMinutes'), 10) || 0)
     };
     var rotChanged = next.orientation !== (settings.orientation || 'landscape');
     if (next.apiUrl && !/^https:\/\//i.test(next.apiUrl)) { toast('The Apps Script URL should start with https://'); return; }
@@ -785,17 +796,23 @@
 
   // ------------------------------------------------------------------ photo mode
   var photoReturnFocus = null;
-  function enterPhotoMode() {
+  function enterPhotoMode(auto) {
     if (body.classList.contains('photo-mode')) return;
     photoReturnFocus = document.activeElement;
     body.classList.add('photo-mode');
     Nav.blur();
     pushLayer('photo', function () {
       body.classList.remove('photo-mode');
+      lastActivity = Date.now(); // leaving photo mode restarts the auto-photo countdown
       if (photoReturnFocus && document.contains(photoReturnFocus)) Nav.focus(photoReturnFocus);
     });
-    if (!show.photos.length) toast('No photos yet — showing the clock');
+    if (!auto && !show.photos.length) toast('No photos yet — showing the clock');
   }
+
+  // A click or tap anywhere in photo mode brings the dashboard back (pointer-cursor browsers, PCs).
+  document.addEventListener('mousedown', function () {
+    if (body.classList.contains('photo-mode') && modal.hidden) closeTop();
+  });
 
   // ------------------------------------------------------------------ remote keys (app level)
   Nav.on('key', function (e, dir) {
@@ -857,7 +874,20 @@
       if (pendingTodoRender) renderTodos();
     }
     if (undimUntil && Date.now() > undimUntil) { undimUntil = 0; applyNightDim(new Date()); }
+
+    // Auto photo mode after N minutes without input (0 = off). Not while a dialog is open.
+    var autoMin = +settings.autoPhotoMinutes || 0;
+    if (autoMin > 0 && modal.hidden && !body.classList.contains('photo-mode') &&
+        Date.now() - lastActivity > autoMin * 60e3) {
+      enterPhotoMode(true);
+    }
   }, 5000);
+  // On a PC, moving the mouse also counts as "someone is using it".
+  var lastMove = 0;
+  document.addEventListener('mousemove', function () {
+    var now = Date.now();
+    if (now - lastMove > 1000) { lastMove = now; lastActivity = now; }
+  });
 
   var wakeLock = null;
   function keepAwake() {
