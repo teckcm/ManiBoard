@@ -9,6 +9,7 @@ window.MANIBOARD_CONFIG = {
   weatherCity: '',       // e.g. 'London' — leave empty to hide weather
   tempUnit: 'celsius',   // 'celsius' | 'fahrenheit'
   use24h: false,
+  orientation: 'landscape', // 'landscape' | 'portrait-cw' | 'portrait-ccw' (TV mounted on its side)
   slideSeconds: 30,      // seconds per background photo
   calendarDays: 14,      // how far ahead the agenda looks
   kenBurns: true,        // slow zoom on photos (turn off if the box feels sluggish)

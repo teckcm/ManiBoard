@@ -37,16 +37,34 @@
     return ((h % 12) || 12) + ':' + pad(m) + ' ' + (h < 12 ? 'AM' : 'PM');
   }
 
-  // Root font size follows the screen width; ignore height-only shrinks (on-screen keyboard).
-  var lastW = 0, lastH = 0;
-  function sizeRoot() {
-    var w = window.innerWidth, h = window.innerHeight;
-    if (w === lastW && h < lastH) return;
-    lastW = w; lastH = h;
-    document.documentElement.style.fontSize = Math.min(w / 120, h / 67.5) + 'px';
+  // ---- Screen orientation --------------------------------------------------
+  // Android TV always outputs landscape, so for a TV mounted on its side the whole page
+  // (#stage) is rotated 90°. 'portrait-cw' / 'portrait-ccw' pick the direction.
+  var ROT = 0, stage = $('stage');
+  function logicalSize() {
+    return ROT ? { w: window.innerHeight, h: window.innerWidth } : { w: window.innerWidth, h: window.innerHeight };
   }
-  sizeRoot();
-  window.addEventListener('resize', sizeRoot);
+  // Root font size follows the screen; portrait uses 1rem = width/67.5, landscape width/120.
+  // Height-only shrinks are ignored (that's the on-screen keyboard opening).
+  var lastW = 0, lastH = 0;
+  function applyOrientation(force) {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (!force && vw === lastW && vh < lastH) return;
+    lastW = vw; lastH = vh;
+    var o = settings.orientation;
+    ROT = o === 'portrait-cw' ? 90 : o === 'portrait-ccw' ? -90 : 0;
+    body.classList.toggle('rot-cw', ROT === 90);
+    body.classList.toggle('rot-ccw', ROT === -90);
+    var L = logicalSize();
+    stage.style.width = ROT ? L.w + 'px' : '';
+    stage.style.height = ROT ? L.h + 'px' : '';
+    var portrait = L.h > L.w;
+    body.classList.toggle('portrait', portrait);
+    document.documentElement.style.fontSize = (portrait ? Math.min(L.w / 67.5, L.h / 120) : Math.min(L.w / 120, L.h / 67.5)) + 'px';
+    Nav.setRotation(ROT);
+  }
+  applyOrientation(true);
+  window.addEventListener('resize', function () { applyOrientation(false); });
 
   // ------------------------------------------------------------------ icons
   var ICONS = {
@@ -209,11 +227,12 @@
       var i = kv.indexOf('=');
       if (i > 0) { try { p[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { /* bad encoding */ } }
     });
-    if (!p.api && !p.key && !p.city) return;
+    if (!p.api && !p.key && !p.city && !p.rotate) return;
     var o = lsGet(LS.settings, {});
     if (p.api) o.apiUrl = p.api;
     if (p.key) o.apiKey = p.key;
     if (p.city) o.weatherCity = p.city;
+    if (p.rotate) o.orientation = p.rotate === 'cw' ? 'portrait-cw' : p.rotate === 'ccw' ? 'portrait-ccw' : 'landscape';
     lsSet(LS.settings, o);
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
     setTimeout(function () { toast('Setup saved on this TV'); }, 600);
@@ -568,6 +587,10 @@
       '<div class="field"><span>Temperature</span>' + seg('tempUnit', [['celsius', '°C'], ['fahrenheit', '°F']], settings.tempUnit === 'fahrenheit' ? 'fahrenheit' : 'celsius') + '</div>' +
       '<div class="field"><span>Photo zoom</span>' + seg('kenBurns', [['1', 'On'], ['0', 'Off']], settings.kenBurns === false ? '0' : '1') + '</div>' +
       '</div>' +
+      '<div class="field"><span>Screen</span>' + seg('orientation',
+        [['landscape', 'Landscape'], ['portrait-cw', 'Portrait ↻'], ['portrait-ccw', 'Portrait ↺']],
+        settings.orientation === 'portrait-cw' || settings.orientation === 'portrait-ccw' ? settings.orientation : 'landscape') +
+      '<div class="hint">For a TV mounted on its side. If the picture is upside down, pick the other portrait option.</div></div>' +
       '<div class="btn-row"><button type="button" class="btn focusable" data-action="close">Cancel</button>' +
       '<button type="button" class="btn primary focusable" data-action="save-settings">Save</button></div>' +
       '</form>');
@@ -583,8 +606,10 @@
       slideSeconds: clamp(parseInt(val('slideSeconds'), 10) || 30, 5, 3600),
       use24h: segValue('use24h') === '1',
       tempUnit: segValue('tempUnit') || 'celsius',
-      kenBurns: segValue('kenBurns') !== '0'
+      kenBurns: segValue('kenBurns') !== '0',
+      orientation: segValue('orientation') || 'landscape'
     };
+    var rotChanged = next.orientation !== (settings.orientation || 'landscape');
     if (next.apiUrl && !/^https:\/\//i.test(next.apiUrl)) { toast('The Apps Script URL should start with https://'); return; }
     var apiChanged = next.apiUrl !== settings.apiUrl || next.apiKey !== settings.apiKey;
     var weatherChanged = next.weatherCity !== settings.weatherCity || next.tempUnit !== settings.tempUnit;
@@ -594,6 +619,10 @@
     Object.assign(settings, next);
     closeModal();
     toast('Settings saved');
+    if (rotChanged) {
+      applyOrientation(true);
+      if (show.photos.length) setTimeout(function () { showPhoto(1); }, 300); // refit photo to the new shape
+    }
     tick(true);
     if (weatherChanged) loadWeather();
     if (apiChanged) {
@@ -696,7 +725,8 @@
     show.pos = pos;
     var p = show.photos[show.order[pos]];
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var w = Math.min(1920, Math.round(window.innerWidth * dpr)), h = Math.min(1080, Math.round(window.innerHeight * dpr));
+    var L = logicalSize();
+    var w = Math.min(1920, Math.round(L.w * dpr)), h = Math.min(1920, Math.round(L.h * dpr));
     var url = photoUrl(p, w, h);
     show.loading = true;
     var img = new Image();
@@ -718,8 +748,11 @@
   function swapTo(p, url) {
     var next = slides[1 - show.layer], cur = slides[show.layer];
     var aspect = p.w && p.h ? p.w / p.h : 16 / 9;
-    var screenAspect = window.innerWidth / window.innerHeight;
-    var contain = aspect < 1.2 || aspect > screenAspect * 1.6; // portrait & panoramas: show whole photo
+    var L = logicalSize(), screenAspect = L.w / L.h;
+    // Fill the screen when the photo's shape is close to the screen's; otherwise show the
+    // whole photo over a blurred copy (portrait photos on a landscape TV and vice versa).
+    var ratio = aspect / screenAspect;
+    var contain = ratio < 0.7 || ratio > 1.45;
     var img = next.querySelector('.slide-img'), bg = next.querySelector('.slide-bg');
     next.classList.toggle('contain', contain);
     img.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';

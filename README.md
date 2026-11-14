@@ -96,6 +96,13 @@ After about 40 seconds without input, the highlight hides so the screen looks cl
 
 The screen dims automatically from 23:00 to 06:00. Press any button to undim it for a minute.
 
+## Portrait (TV mounted on its side)
+Android TV boxes always output landscape, so the dashboard rotates itself:
+**Settings → Screen → Portrait ↻ or Portrait ↺** (pick whichever looks upright on your TV).
+You can also add `&rotate=cw` or `&rotate=ccw` to the setup link.
+The remote's arrows follow the rotated screen, so ▲ still moves up.
+On a screen that is already tall (a phone, or a monitor rotated in its own settings) the portrait layout is used automatically. Leave Screen on *Landscape* there.
+
 ## Settings
 Open **Settings** on the TV to change the backend URL/key, weather city, 12/24-hour clock, °C/°F, seconds per photo and photo zoom.
 Defaults for these (and night-dim hours) live in [`config.js`](config.js).
