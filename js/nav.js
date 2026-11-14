@@ -12,6 +12,21 @@
   var scope = null;          // when a modal is open, navigation is trapped inside it
   var lastFocused = null;
   var hooks = { key: null, back: null, activity: null };
+  var rotation = 0;          // 90 / -90 when the page is rotated for a portrait-mounted TV
+
+  // Element position as the viewer sees it (undoes the page rotation), so ▲ always means "up".
+  function rectOf(el) {
+    var r = el.getBoundingClientRect();
+    if (rotation === 90) {
+      var H = window.innerWidth;
+      return { left: r.top, right: r.bottom, top: H - r.right, bottom: H - r.left, width: r.height, height: r.width };
+    }
+    if (rotation === -90) {
+      var W = window.innerHeight;
+      return { left: W - r.bottom, right: W - r.top, top: r.left, bottom: r.right, width: r.height, height: r.width };
+    }
+    return r;
+  }
 
   function isVisible(el) {
     if (el.disabled) return false;
@@ -28,7 +43,7 @@
     var sc = scrollerOf(el);
     if (!sc) return true;
     if (cur && scrollerOf(cur) === sc) return true;
-    var r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
+    var r = rectOf(el), s = rectOf(sc);
     return r.bottom > s.top + 4 && r.top < s.bottom - 4;
   }
 
@@ -70,7 +85,7 @@
   function scrollIntoList(el) {
     var sc = scrollerOf(el);
     if (!sc) return;
-    var r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
+    var r = rectOf(el), s = rectOf(sc);
     var pad = parseFloat(getComputedStyle(document.documentElement).fontSize) * 3;
     var delta = 0;
     if (r.top < s.top + pad) delta = r.top - s.top - pad;
@@ -107,11 +122,11 @@
   function move(dir) {
     var cur = current();
     if (!cur) return focusDefault();
-    var a = cur.getBoundingClientRect();
+    var a = rectOf(cur);
     var list = candidates(cur), best = null, bestScore = Infinity;
     for (var i = 0; i < list.length; i++) {
       if (list[i] === cur) continue;
-      var s = score(a, list[i].getBoundingClientRect(), dir);
+      var s = score(a, rectOf(list[i]), dir);
       if (s !== null && s < bestScore) { best = list[i]; bestScore = s; }
     }
     return best ? focus(best) : false;
@@ -170,6 +185,7 @@
     focusDefault: focusDefault,
     move: move,
     setScope: function (el) { scope = el || null; },
+    setRotation: function (deg) { rotation = deg || 0; },
     getScope: function () { return scope; },
     forget: function () { lastFocused = null; },
     blur: function () {

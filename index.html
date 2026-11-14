@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="no-photos">
+<!-- #stage holds everything; it is rotated 90° when the TV is mounted in portrait -->
+<div id="stage">
 
   <!-- Background photo slideshow (two layers that cross-fade) -->
   <div class="slideshow" aria-hidden="true">
@@ -61,6 +63,7 @@
   <div class="night-dim" id="nightDim" aria-hidden="true"></div>
   <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
   <div class="toast" id="toast" role="status"></div>
+</div>
 
   <script src="config.js"></script>
   <script src="js/nav.js"></script>

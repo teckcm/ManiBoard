@@ -30,6 +30,11 @@ body {
   user-select: none;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---------- Stage (rotated for portrait-mounted TVs) ---------- */
+#stage { position: fixed; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; transform-origin: 0 0; }
+.rot-cw #stage  { transform: rotate(90deg) translateY(-100%); }
+.rot-ccw #stage { transform: rotate(-90deg) translateX(-100%); }
 .ic { width: 1em; height: 1em; display: block; flex: none; }
 [hidden] { display: none !important; }
 
@@ -218,7 +223,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: rgba(5, 6, 8, 0.62);
 }
 .sheet {
-  width: 62rem; max-width: 86vw; max-height: 86vh; overflow: auto; box-sizing: border-box;
+  width: 62rem; max-width: calc(100% - 6rem); max-height: calc(100% - 6rem); overflow: auto; box-sizing: border-box;
   background: var(--panel-solid); border: 1px solid var(--line); border-radius: 1.8rem;
   padding: 2.6rem 2.8rem; box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.5);
   animation: pop 0.22s ease-out;
@@ -260,3 +265,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   pointer-events: none; white-space: nowrap;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Portrait layout (TV on its side, or any tall screen) ----------
+   Clock on top, a window of photo in the middle, calendar + to-do below, buttons at the bottom.
+   In portrait 1rem = 1/67.5 of the screen width (16px on a 1080×1920 screen). */
+.portrait .app { display: flex; flex-direction: column; gap: 2rem; padding: 3rem 3.4rem 2.6rem; }
+.portrait .left { display: contents; }
+.portrait .hero { order: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; }
+.portrait .hero > * { grid-column: 1; }
+.portrait .clock { font-size: 10rem; }
+.portrait .date { font-size: 2.2rem; }
+.portrait .weather {
+  grid-column: 2; grid-row: 1 / span 3; align-self: end;
+  flex-direction: column; align-items: flex-end; gap: 0.5rem; margin: 0 0 0.5rem; text-align: right;
+}
+.portrait .w-text { align-items: flex-end; }
+.portrait .right { order: 2; margin-top: auto; flex: 0 0 auto; height: 57rem; }
+.portrait .toolbar { order: 3; }
+.portrait .scrim {
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.08) 24%, rgba(0,0,0,0.1) 42%, rgba(0,0,0,0.6) 100%);
+}
