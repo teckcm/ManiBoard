@@ -164,6 +164,7 @@
       e.preventDefault();
       if (e.repeat) return;
       var c = current();
+      lastKeyActivate = Date.now();
       if (c && c.click) c.click(); else focusDefault();
       return;
     }
@@ -172,6 +173,21 @@
                  (e.key === 'Backspace' && !text);
     if (isBack && hooks.back && hooks.back()) e.preventDefault();
   }, true);
+
+  // Some Android TV WebViews (Fully Kiosk) turn the remote's OK button into a key press AND a
+  // fake tap at the same spot. We already acted on the key press, so swallow that echo tap —
+  // otherwise it lands on whatever just opened (e.g. a dialog's backdrop) and closes it again.
+  var lastKeyActivate = 0;
+  function swallowEcho(e) {
+    if (e.isTrusted && Date.now() - lastKeyActivate < 700) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    }
+  }
+  ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach(function (t) {
+    window.addEventListener(t, swallowEcho, { capture: true, passive: false });
+  });
 
   // Mouse / pointer-cursor browsers: keep focus in sync with what was clicked.
   document.addEventListener('mousedown', function (e) {

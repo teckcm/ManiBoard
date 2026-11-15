@@ -140,6 +140,7 @@
     var wasOpen = !modal.hidden;
     sheet.innerHTML = html;
     fillIcons(sheet);
+    modalOpenedAt = Date.now();
     if (!wasOpen) {
       modalReturnFocus = document.activeElement;
       modal.hidden = false;
@@ -155,7 +156,12 @@
     setTimeout(function () { Nav.focusDefault(); }, 40);
   }
   function closeModal() { if (!modal.hidden) closeTop(); }
-  modal.addEventListener('mousedown', function (e) { if (e.target === modal) closeModal(); });
+  // Clicking the dark backdrop closes the dialog — but not in the first moment after it opened,
+  // so a stray tap from the same button press can't close it straight away.
+  var modalOpenedAt = 0;
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal && Date.now() - modalOpenedAt > 600) closeModal();
+  });
 
   // ------------------------------------------------------------------ clock, greeting, night dim
   var lastMinuteKey = '', lastDayKey = '', undimUntil = 0;
