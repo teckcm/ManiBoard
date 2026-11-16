@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@200;300;400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="no-photos">
+<body class="no-photos on-home">
 <!-- #stage holds everything; it is rotated 90° when the TV is mounted in portrait -->
 <div id="stage">
 
@@ -22,41 +22,109 @@
   </div>
 
   <main class="app" id="app">
-    <section class="left">
-      <header class="hero">
-        <div class="greeting" id="greeting">&nbsp;</div>
-        <div class="clock"><span id="clockTime">--:--</span><span class="ampm" id="clockAmPm"></span></div>
-        <div class="date" id="clockDate">&nbsp;</div>
-        <div class="weather" id="weather" hidden></div>
-      </header>
+    <div class="pages">
 
-      <nav class="toolbar" aria-label="Controls">
-        <button class="tool focusable" data-action="photo-mode"><span data-icon="image"></span>Photo mode</button>
-        <button class="tool focusable" data-action="next-photo"><span data-icon="next"></span>Next photo</button>
-        <button class="tool focusable" data-action="refresh"><span data-icon="refresh"></span>Refresh</button>
-        <button class="tool focusable" data-action="settings"><span data-icon="sliders"></span>Settings</button>
-        <span class="status" id="status"></span>
-      </nav>
-    </section>
+      <!-- ============ Page 1: Home ============ -->
+      <section class="page page-home" data-page="home">
+        <div class="left">
+          <header class="hero">
+            <div class="greeting" id="greeting">&nbsp;</div>
+            <div class="clock"><span id="clockTime">--:--</span><span class="ampm" id="clockAmPm"></span></div>
+            <div class="date" id="clockDate">&nbsp;</div>
+            <div class="weather" id="weather" hidden></div>
+          </header>
 
-    <aside class="right">
-      <section class="panel cal-panel">
-        <div class="panel-head">
-          <h2 class="panel-title">Calendar</h2>
-          <span class="panel-sub" id="calSub"></span>
+          <section class="panel next-meals">
+            <div class="panel-head">
+              <h2 class="panel-title">Next meals</h2>
+              <span class="panel-sub" id="nextMealsSub"></span>
+            </div>
+            <div class="meal-tiles" id="nextMeals"></div>
+          </section>
         </div>
-        <div class="scroll" id="calList"></div>
+
+        <aside class="right">
+          <section class="panel cal-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">Calendar</h2>
+              <span class="panel-sub" id="calSub"></span>
+            </div>
+            <div class="scroll" id="calList"></div>
+            <button class="add-btn focusable" data-action="add-event"><span data-icon="plus"></span>Add event</button>
+          </section>
+
+          <section class="panel todo-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">To-do</h2>
+              <span class="panel-sub" id="todoSub"></span>
+            </div>
+            <div class="scroll" id="todoList"></div>
+            <button class="add-btn focusable" data-action="add-task"><span data-icon="plus"></span>Add task</button>
+          </section>
+        </aside>
       </section>
 
-      <section class="panel todo-panel">
-        <div class="panel-head">
-          <h2 class="panel-title">To-do</h2>
-          <span class="panel-sub" id="todoSub"></span>
-        </div>
-        <div class="scroll" id="todoList"></div>
-        <button class="add-btn focusable" data-action="add-task"><span data-icon="plus"></span>Add task</button>
+      <!-- ============ Page 2: Month calendar ============ -->
+      <section class="page page-month" data-page="month" hidden>
+        <section class="panel month-panel">
+          <div class="page-head">
+            <h2 class="page-title" id="monthTitle">&nbsp;</h2>
+            <div class="head-actions">
+              <button class="btn focusable" data-action="month-prev" aria-label="Previous month"><span data-icon="left"></span></button>
+              <button class="btn focusable" data-action="month-today">Today</button>
+              <button class="btn focusable" data-action="month-next" aria-label="Next month"><span data-icon="right"></span></button>
+            </div>
+            <div class="page-clock" data-clock></div>
+          </div>
+          <div class="dow-row" id="monthDow"></div>
+          <div class="month-grid" id="monthGrid"></div>
+        </section>
       </section>
-    </aside>
+
+      <!-- ============ Page 3: Meal planner + groceries ============ -->
+      <section class="page page-meals" data-page="meals" hidden>
+        <section class="panel meals-panel">
+          <div class="page-head">
+            <h2 class="page-title" id="weekTitle">&nbsp;</h2>
+            <div class="head-actions">
+              <button class="btn focusable" data-action="week-prev" aria-label="Previous week"><span data-icon="left"></span></button>
+              <button class="btn focusable" data-action="week-today">This week</button>
+              <button class="btn focusable" data-action="week-next" aria-label="Next week"><span data-icon="right"></span></button>
+            </div>
+            <div class="page-clock" data-clock></div>
+          </div>
+          <div class="meal-table" id="mealTable"></div>
+        </section>
+
+        <aside class="panel grocery-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Groceries</h2>
+            <span class="panel-sub" id="grocerySub"></span>
+          </div>
+          <div class="scroll" id="groceryList"></div>
+          <div class="grocery-actions">
+            <button class="add-btn focusable" data-action="add-grocery"><span data-icon="plus"></span>Add item</button>
+            <button class="add-btn focusable" data-action="clear-groceries"><span data-icon="check"></span>Clear ticked</button>
+          </div>
+        </aside>
+      </section>
+    </div>
+
+    <!-- ============ Bottom bar: page selector + controls ============ -->
+    <nav class="bottombar" aria-label="Pages and controls">
+      <div class="tabs" role="tablist">
+        <button class="tab focusable" data-action="page" data-page="home" aria-current="page"><span data-icon="home"></span><span class="lbl">Home</span></button>
+        <button class="tab focusable" data-action="page" data-page="month"><span data-icon="calendar"></span><span class="lbl">Month</span></button>
+        <button class="tab focusable" data-action="page" data-page="meals"><span data-icon="meal"></span><span class="lbl">Meals</span></button>
+      </div>
+      <div class="tools">
+        <button class="tool focusable" data-action="photo-mode"><span data-icon="image"></span><span class="lbl">Photo mode</span></button>
+        <button class="tool focusable" data-action="next-photo"><span data-icon="next"></span><span class="lbl">Next photo</span></button>
+        <button class="tool focusable" data-action="refresh"><span data-icon="refresh"></span><span class="lbl">Refresh</span></button>
+        <button class="tool focusable" data-action="settings"><span data-icon="sliders"></span><span class="lbl">Settings</span></button>
+      </div>
+      <span class="status" id="status"></span>
+    </nav>
   </main>
 
   <div class="mini-clock" id="miniClock" aria-hidden="true"></div>

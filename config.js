@@ -11,7 +11,8 @@ window.MANIBOARD_CONFIG = {
   use24h: false,
   orientation: 'landscape', // 'landscape' | 'portrait-cw' | 'portrait-ccw' (TV mounted on its side)
   slideSeconds: 30,      // seconds per background photo
-  calendarDays: 14,      // how far ahead the agenda looks
+  defaultCalendar: 'Family', // new events go to the calendar with this name (falls back to your main calendar)
+  calendarDays: 7,      // how far ahead the Home agenda looks (the Month page shows the rest)
   kenBurns: true,        // slow zoom on photos (turn off if the box feels sluggish)
   nightDim: { enabled: true, from: 23, to: 6, opacity: 0.6 }, // dim the screen at night
   autoPhotoMinutes: 5,   // switch to photo mode after this many idle minutes (0 = off, 0.5 = 30 seconds)

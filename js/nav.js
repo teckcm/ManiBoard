@@ -132,9 +132,53 @@
     return best ? focus(best) : false;
   }
 
-  function isTextField(el) {
-    return !!el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|submit|range)$/i.test(el.type)));
+  // Date / time boxes use the device's own picker: OK opens it, arrows move between fields.
+  function isPickerField(el) {
+    return !!el && el.tagName === 'INPUT' && /^(date|time|datetime-local|month|week)$/i.test(el.type);
   }
+  function openPicker(el) {
+    try { if (el.showPicker) { el.showPicker(); return; } } catch (e) { /* not allowed here */ }
+    el.focus(); el.click();
+  }
+
+  function isTextField(el) {
+    return !!el && !isPickerField(el) &&
+      (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|submit|range)$/i.test(el.type)));
+  }
+  var touchMode = false; // phones: normal keyboard behaviour, no remote tricks
+
+  // ---- On-screen keyboard control -----------------------------------------------
+  // On Android TV, focusing a text box pops up a full-screen keyboard that hides the page.
+  // So text boxes start with inputmode="none" (no keyboard): arrowing onto one only highlights
+  // it, and pressing OK on it brings the keyboard up.
+  function prepInputs(root) {
+    if (touchMode) return;
+    var els = (root || document).querySelectorAll('input.input, textarea.input');
+    for (var i = 0; i < els.length; i++) {
+      if (isPickerField(els[i])) continue;
+      var el = els[i];
+      if (!el.hasAttribute('data-im')) el.setAttribute('data-im', el.getAttribute('inputmode') || 'text');
+      el.setAttribute('inputmode', 'none');
+    }
+  }
+  function openKeyboard(el) {
+    if (el.getAttribute('inputmode') !== 'none') return false; // keyboard already allowed
+    el.blur();
+    el.setAttribute('inputmode', el.getAttribute('data-im') || 'text');
+    el.focus();
+    try { var n = el.value.length; el.setSelectionRange(n, n); } catch (e) { /* not supported */ }
+    return true;
+  }
+  // Leaving a text box switches its keyboard off again.
+  document.addEventListener('focusout', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('input') && t.hasAttribute('data-im')) t.setAttribute('inputmode', 'none');
+  }, true);
+  // Tapping a text box (touch screens, mouse) should still open the keyboard.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('input') && t.getAttribute('inputmode') === 'none') openKeyboard(t);
+  });
 
   var DIRS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Up: 'up', Down: 'down', Left: 'left', Right: 'right' };
   var CODES = { 38: 'up', 40: 'down', 37: 'left', 39: 'right', 19: 'up', 20: 'down', 21: 'left', 22: 'right' };
@@ -159,8 +203,17 @@
     }
 
     var isEnter = e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 23 || e.keyCode === 66;
+    if (isEnter && isPickerField(t)) {
+      e.preventDefault();
+      if (!e.repeat) openPicker(t);
+      return;
+    }
     if (isEnter) {
-      if (text) return; // forms handle their own submit
+      if (text) {
+        // First OK on a text box opens the keyboard; after typing, Enter is handled by the page.
+        if (!e.repeat && openKeyboard(t)) { e.preventDefault(); e.stopImmediatePropagation(); }
+        return;
+      }
       e.preventDefault();
       if (e.repeat) return;
       var c = current();
@@ -202,6 +255,8 @@
     move: move,
     setScope: function (el) { scope = el || null; },
     setRotation: function (deg) { rotation = deg || 0; },
+    prepInputs: prepInputs,
+    setTouchMode: function (on) { touchMode = !!on; },
     getScope: function () { return scope; },
     forget: function () { lastFocused = null; },
     blur: function () {

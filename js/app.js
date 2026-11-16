@@ -7,7 +7,10 @@
   'use strict';
 
   // ------------------------------------------------------------------ basics
-  var LS = { settings: 'mb.settings', todos: 'mb.todos', cache: 'mb.cache', photos: 'mb.photos', geo: 'mb.geo', weather: 'mb.weather' };
+  var LS = {
+    settings: 'mb.settings', todos: 'mb.todos', cache: 'mb.cache', photos: 'mb.photos', geo: 'mb.geo', weather: 'mb.weather',
+    meals: 'mb.meals', groceries: 'mb.groceries'
+  };
   var DEMO = /[?&]demo=1\b/.test(location.search);
   var $ = function (id) { return document.getElementById(id); };
   var body = document.body;
@@ -26,7 +29,7 @@
   importSetupFromHash();
   var settings = Object.assign({}, window.MANIBOARD_CONFIG || {}, lsGet(LS.settings, {}));
   settings.slideSeconds = clamp(+settings.slideSeconds || 30, 5, 3600);
-  settings.calendarDays = clamp(+settings.calendarDays || 14, 1, 60);
+  settings.calendarDays = clamp(+settings.calendarDays || 7, 1, 60);
   settings.refreshMinutes = settings.refreshMinutes || { dashboard: 3, photos: 360, weather: 30 };
 
   function mode() { return DEMO ? 'demo' : (settings.apiUrl && settings.apiKey ? 'google' : 'local'); }
@@ -47,10 +50,34 @@
   // Root font size follows the screen; portrait uses 1rem = width/67.5, landscape width/120.
   // Height-only shrinks are ignored (that's the on-screen keyboard opening).
   var lastW = 0, lastH = 0;
+
+  // ---- Phone layout ------------------------------------------------------------
+  // Phones (touch screen, small) get a scrolling, app-like layout instead of the TV screen.
+  // Force it either way with ?view=mobile or ?view=tv in the address.
+  var VIEW = (location.search.match(/[?&]view=(mobile|tv)\b/) || [])[1] || '';
+  var MOBILE = false;
+  function detectMobile() {
+    if (VIEW) return VIEW === 'mobile';
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    return !!coarse && Math.min(window.innerWidth, window.innerHeight) < 600;
+  }
+
   function applyOrientation(force) {
     var vw = window.innerWidth, vh = window.innerHeight;
     if (!force && vw === lastW && vh < lastH) return;
     lastW = vw; lastH = vh;
+    MOBILE = detectMobile();
+    body.classList.toggle('mobile', MOBILE);
+    document.documentElement.classList.toggle('mobile-root', MOBILE);
+    Nav.setTouchMode(MOBILE);
+    if (MOBILE) {
+      ROT = 0;
+      body.classList.remove('rot-cw', 'rot-ccw', 'portrait');
+      stage.style.width = ''; stage.style.height = '';
+      document.documentElement.style.fontSize = clamp(vw / 38, 9.5, 11.5) + 'px';
+      Nav.setRotation(0);
+      return;
+    }
     var o = settings.orientation;
     ROT = o === 'portrait-cw' ? 90 : o === 'portrait-ccw' ? -90 : 0;
     body.classList.toggle('rot-cw', ROT === 90);
@@ -68,6 +95,10 @@
 
   // ------------------------------------------------------------------ icons
   var ICONS = {
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+    meal: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
     image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
     next: '<path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/>',
     refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
@@ -140,6 +171,7 @@
     var wasOpen = !modal.hidden;
     sheet.innerHTML = html;
     fillIcons(sheet);
+    Nav.prepInputs(sheet); // no pop-up keyboard until OK is pressed on a text box
     modalOpenedAt = Date.now();
     if (!wasOpen) {
       modalReturnFocus = document.activeElement;
@@ -178,16 +210,24 @@
     $('clockDate').textContent = dateText;
     $('greeting').textContent = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Good night';
     $('miniClock').innerHTML = esc(fmtTime(d)) + '<small>' + esc(dateText) + '</small>';
+    var clocks = document.querySelectorAll('[data-clock]');
+    for (var i = 0; i < clocks.length; i++) clocks[i].textContent = fmtTime(d);
     applyNightDim(d);
 
     var dayKey = ymd(d);
-    if (lastDayKey && dayKey !== lastDayKey) loadDashboard(); // new day → new agenda window
+    var newDay = lastDayKey && dayKey !== lastDayKey;
     lastDayKey = dayKey;
-    renderCalendar(); // drops finished events, updates "Now"
+    if (newDay) { // new day → new agenda window, new "today" on every page
+      loadDashboard();
+      if (ui.page === 'month') renderMonth();
+      if (ui.page === 'meals') renderMealsPage();
+    }
+    renderCalendar();   // drops finished events, updates "Now"
+    renderNextMeals();  // switches meals at 10am and 9pm
   }
   function applyNightDim(d) {
     var nd = settings.nightDim || {}, on = false;
-    if (nd.enabled && Date.now() > undimUntil) {
+    if (nd.enabled && !MOBILE && Date.now() > undimUntil) {
       var h = d.getHours();
       on = nd.from > nd.to ? (h >= nd.from || h < nd.to) : (h >= nd.from && h < nd.to);
     }
@@ -245,27 +285,72 @@
   }
 
   // ------------------------------------------------------------------ dashboard data (calendar + tasks)
-  var state = { events: [], tasks: [], updated: null, errShown: false, demoLoaded: false };
+  var state = {
+    events: [], tasks: [], updated: null, errShown: false, demoLoaded: false,
+    meals: {},        // 'yyyy-mm-dd' → { breakfast, lunch, snack, dinner }
+    mealDates: {},    // dates already fetched from the sheet
+    groceries: [],    // [{ id, item, done }]
+    monthCache: {},   // 'yyyy-mm' → { at, events }
+    calendars: []     // calendars you can add events to [{ id, name, color, primary }]
+  };
+
+  function renderAll() {
+    renderCalendar(); renderTodos(); renderNextMeals(); renderGroceries();
+    if (ui.page === 'meals') renderMealsPage();
+    if (ui.page === 'month') renderMonth();
+  }
+
+  function mergeMeals(list) {
+    (list || []).forEach(function (r) {
+      if (!r || !r.date) return;
+      state.meals[r.date] = { breakfast: r.breakfast || '', lunch: r.lunch || '', snack: r.snack || '', dinner: r.dinner || '' };
+      state.mealDates[r.date] = true;
+    });
+  }
+
+  function objToMealList(o) {
+    return Object.keys(o || {}).map(function (k) { return Object.assign({ date: k }, o[k]); });
+  }
 
   function loadDashboard() {
     var m = mode();
     if (m === 'demo') {
-      if (!state.demoLoaded) { var d = demoData(); state.events = d.events; state.tasks = d.tasks; state.demoLoaded = true; }
-      renderCalendar(); renderTodos(); setStatus('Demo mode');
+      if (!state.demoLoaded) {
+        var d = demoData();
+        state.events = d.events; state.tasks = d.tasks; state.groceries = d.groceries;
+        mergeMeals(d.meals);
+        state.calendars = [
+          { id: 'demo-family', name: 'Family', color: '#8e24aa', primary: true },
+          { id: 'demo-work', name: 'Work', color: '#039be5', primary: false }
+        ];
+        state.demoLoaded = true;
+      }
+      renderAll(); setStatus('Demo mode');
       return Promise.resolve();
     }
     if (m === 'local') {
-      renderCalendar(); renderTodos(); setStatus('Not connected · open Settings');
+      renderAll(); setStatus('Not connected · open Settings');
       return Promise.resolve();
     }
     if (!state.updated) setStatus('Loading…');
-    return api('dashboard', { from: startOfDay(new Date()).toISOString(), days: settings.calendarDays })
+    var monday = mondayOf(new Date());
+    return api('dashboard', {
+      from: startOfDay(new Date()).toISOString(), days: settings.calendarDays,
+      mealsFrom: ymd(monday), mealDays: 14
+    })
       .then(function (j) {
         state.updated = new Date();
         state.events = j.events || [];
         state.tasks = j.tasks || [];
-        lsSet(LS.cache, { events: state.events, tasks: state.tasks, at: Date.now(), api: settings.apiUrl });
-        renderCalendar(); renderTodos();
+        if (j.meals) mergeMeals(j.meals);
+        if (j.groceries) state.groceries = j.groceries;
+        if (j.calendars) state.calendars = j.calendars;
+        lsSet(LS.cache, {
+          events: state.events, tasks: state.tasks, meals: j.meals || [], groceries: state.groceries,
+          at: Date.now(), api: settings.apiUrl
+        });
+        renderAll();
+        if (ui.page === 'month') loadMonth();
         if (j.errors && j.errors.length) {
           setStatus(j.errors[0], true);
           if (!state.errShown) { state.errShown = true; toast(j.errors[0], 7000); }
@@ -284,6 +369,8 @@
     if (c && c.api === settings.apiUrl) {
       state.events = c.events || [];
       state.tasks = c.tasks || [];
+      state.groceries = c.groceries || [];
+      mergeMeals(c.meals);
       state.updated = new Date(c.at);
     }
   }
@@ -336,6 +423,8 @@
 
   function renderCalendar() {
     var el = $('calList'), m = mode();
+    var addBtn = document.querySelector('[data-action="add-event"]');
+    if (addBtn) addBtn.hidden = m === 'local';
     if (m === 'local') {
       $('calSub').textContent = '';
       rerender(el,
@@ -367,9 +456,141 @@
     rerender(el, html);
   }
 
-  function openEvent(idx) {
-    var ev = state.events[idx];
+  // ---- Calendar editing -------------------------------------------------------
+  // Only single-day, non-repeating events are edited here; everything else says
+  // "change it in Google Calendar" so a one-date form can't damage it.
+  function isEditable(ev) {
+    if (!ev || ev.recurring || mode() === 'local') return false;
+    if (mode() === 'google' && !ev.calendarId) return false; // older backend
+    if (ev.allDay) {
+      var next = ymd(addDays(parseYmd(ev.startDate), 1));
+      return !ev.endDate || ev.endDate === next;
+    }
+    var s = new Date(ev.start), e = new Date(ev.end);
+    return ymd(s) === ymd(e) || (ymd(addDays(s, 1)) === ymd(e) && e.getHours() === 0 && e.getMinutes() === 0);
+  }
+  function hm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  // Calendars for new events, with the default one (config.js → defaultCalendar, e.g. "Family") first.
+  function orderedCalendars() {
+    var cals = (state.calendars || []).slice();
+    var want = String(settings.defaultCalendar || '').trim().toLowerCase();
+    if (!want) return cals;
+    var i = -1;
+    cals.forEach(function (c, k) { if (i < 0 && String(c.name).toLowerCase() === want) i = k; });
+    if (i < 0) cals.forEach(function (c, k) { if (i < 0 && String(c.name).toLowerCase().indexOf(want) === 0) i = k; });
+    if (i > 0) cals.unshift(cals.splice(i, 1)[0]);
+    return cals;
+  }
+
+  var eventForm = null; // { ev } while the add/edit form is open
+  function openEventForm(opts) {
+    if (mode() === 'local') { toast('Connect your Google account in Settings first'); return; }
+    var ev = opts.ev || null, now = new Date();
+    var date = ev ? (ev.allDay ? ev.startDate : ymd(new Date(ev.start))) : (opts.date || ymd(now));
+    var allDay = ev ? !!ev.allDay : false;
+    var start, end;
+    if (ev && !ev.allDay) { start = hm(new Date(ev.start)); end = hm(new Date(ev.end)); }
+    else {
+      var h = date === ymd(now) ? Math.min(now.getHours() + 1, 22) : 9;
+      start = pad(h) + ':00'; end = pad(h + 1) + ':00';
+    }
+    eventForm = { ev: ev };
+    var cals = orderedCalendars();
+    var calPick = !ev && cals.length > 1
+      ? '<div class="field"><span>Calendar</span>' + seg('cal', cals.slice(0, 4).map(function (c) { return [c.id, esc(c.name)]; }), cals[0].id) + '</div>'
+      : '';
+    openModal(
+      '<h3>' + (ev ? 'Edit event' : 'New event') + '</h3>' +
+      '<form id="eventForm" autocomplete="off" onsubmit="return false">' +
+      '<label class="field"><span>Title</span><input class="input" id="evTitle" maxlength="200" placeholder="e.g. Dinner with friends" value="' + esc(ev ? ev.title : '') + '" data-autofocus></label>' +
+      '<div class="grid2">' +
+      '<label class="field"><span>Date</span><input class="input" type="date" id="evDate" value="' + date + '"></label>' +
+      '<div class="field"><span>All day</span>' + seg('allday', [['0', 'No'], ['1', 'Yes']], allDay ? '1' : '0') + '</div>' +
+      '<label class="field ev-time-field"' + (allDay ? ' hidden' : '') + '><span>Starts</span><input class="input" type="time" id="evStart" value="' + start + '"></label>' +
+      '<label class="field ev-time-field"' + (allDay ? ' hidden' : '') + '><span>Ends</span><input class="input" type="time" id="evEnd" value="' + end + '"></label>' +
+      '</div>' +
+      '<label class="field"><span>Location (optional)</span><input class="input" id="evLocation" maxlength="200" value="' + esc(ev ? ev.location || '' : '') + '"></label>' +
+      calPick +
+      '<div class="btn-row"><button type="button" class="btn focusable" data-action="close">Cancel</button>' +
+      '<button type="button" class="btn primary focusable" data-action="event-save">' + icon('check') + 'Save</button></div>' +
+      '</form>');
+  }
+
+  function saveEventFromForm() {
+    var title = $('evTitle').value.trim(), date = $('evDate').value;
+    var allDay = segValue('allday') === '1';
+    var start = $('evStart').value, end = $('evEnd').value, location = $('evLocation').value.trim();
+    if (!title) { toast('Give the event a title'); Nav.focus($('evTitle')); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('Pick a date'); Nav.focus($('evDate')); return; }
+    if (!allDay && (!start || !end)) { toast('Pick a start and end time'); return; }
+    var ev = eventForm && eventForm.ev;
+    var firstCal = orderedCalendars()[0];
+    var cal = ev ? ev.calendarId : (segValue('cal') || (firstCal && firstCal.id) || '');
+    closeModal();
+    var m = mode();
+    if (m === 'demo') { demoSaveEvent(ev, cal, title, date, allDay, start, end, location); return; }
+    toast('Saving…');
+    api(ev ? 'event.update' : 'event.add', {
+      cal: cal, id: ev ? ev.id : undefined, title: title, date: date,
+      allDay: allDay ? 1 : 0, start: allDay ? undefined : start, end: allDay ? undefined : end, location: location
+    })
+      .then(function () { toast(ev ? 'Event updated' : 'Event added to Google Calendar'); afterCalendarChange(); })
+      .catch(function (err) { toast('Couldn’t save — ' + err.message, 6000); });
+  }
+
+  var deleteArmedAt = 0;
+  function deleteEventFromDetail(btn) {
+    var ev = ui.detailEvent;
     if (!ev) return;
+    if (Date.now() - deleteArmedAt > 4000) { // first press asks, second press deletes
+      deleteArmedAt = Date.now();
+      btn.classList.add('armed');
+      btn.textContent = 'Press again to delete';
+      return;
+    }
+    deleteArmedAt = 0;
+    closeModal();
+    if (mode() === 'demo') {
+      state.events = state.events.filter(function (x) { return x !== ev; });
+      renderAll(); toast('Event deleted');
+      return;
+    }
+    toast('Deleting…');
+    api('event.delete', { cal: ev.calendarId, id: ev.id })
+      .then(function () { toast('Event deleted'); afterCalendarChange(); })
+      .catch(function (err) { toast('Couldn’t delete — ' + err.message, 6000); });
+  }
+
+  function afterCalendarChange() {
+    state.monthCache = {};
+    loadDashboard();
+    if (ui.page === 'month') loadMonth(true);
+  }
+
+  function demoSaveEvent(ev, calId, title, date, allDay, start, end, location) {
+    var cal = (state.calendars || []).filter(function (c) { return c.id === (calId || (ev && ev.calendarId)); })[0] || {};
+    var target = ev || { id: 'demo' + Date.now(), calendarId: cal.id, calendar: cal.name || 'Family', color: cal.color || '#8e24aa', description: '' };
+    target.title = title; target.location = location; target.allDay = allDay;
+    if (allDay) {
+      target.startDate = date; target.endDate = ymd(addDays(parseYmd(date), 1)); delete target.start; delete target.end;
+    } else {
+      var s = parseYmd(date), e = parseYmd(date), sp = start.split(':'), ep = end.split(':');
+      s.setHours(+sp[0], +sp[1]); e.setHours(+ep[0], +ep[1]);
+      if (e <= s) e = addDays(e, 1);
+      target.start = s.toISOString(); target.end = e.toISOString(); delete target.startDate; delete target.endDate;
+    }
+    if (!ev) state.events.push(target);
+    renderAll();
+    toast(ev ? 'Event updated (demo)' : 'Event added (demo)');
+  }
+
+  function openEvent(idx) { openEventDetail(state.events[idx]); }
+
+  function openEventDetail(ev) {
+    if (!ev) return;
+    ui.detailEvent = ev;
+    deleteArmedAt = 0;
     var when;
     if (ev.allDay) {
       var s = parseYmd(ev.startDate), e = addDays(parseYmd(ev.endDate || ev.startDate), -1);
@@ -386,7 +607,13 @@
       (ev.location ? '<div class="detail-line">' + icon('pin') + esc(ev.location) + '</div>' : '') +
       (ev.calendar ? '<div class="detail-line"><span style="color:' + safeColor(ev.color) + '">' + icon('calendar') + '</span>' + esc(ev.calendar) + '</div>' : '') +
       (ev.description ? '<p class="body-text">' + esc(ev.description) + '</p>' : '') +
-      '<div class="btn-row"><button class="btn primary focusable" data-action="close" data-autofocus>Close</button></div>');
+      (mode() !== 'local' && !isEditable(ev) ? '<p class="hint">' + (ev.recurring ? 'Repeating event' : 'Multi-day event') + ' — change it in Google Calendar.</p>' : '') +
+      '<div class="btn-row">' +
+      (isEditable(ev)
+        ? '<button class="btn focusable danger" data-action="event-delete">' + icon('x') + 'Delete</button>' +
+          '<button class="btn focusable" data-action="event-edit">Edit</button>'
+        : '') +
+      '<button class="btn primary focusable" data-action="close" data-autofocus>Close</button></div>');
   }
 
   // ------------------------------------------------------------------ to-do
@@ -482,22 +709,29 @@
       });
   }
 
+  // First press on a ✕ arms it ("Delete?"), a second press within 3.5 s confirms.
   var armedTimer;
-  function deleteTodo(btn) {
-    if (!btn.classList.contains('armed')) { // first press arms, second press deletes
-      btn.classList.add('armed');
-      btn.innerHTML = icon('x') + 'Delete?';
-      clearTimeout(armedTimer);
-      armedTimer = setTimeout(function () {
-        if (document.contains(btn)) { btn.classList.remove('armed'); btn.innerHTML = icon('x'); }
-      }, 3500);
-      return;
-    }
-    var id = btn.getAttribute('data-id'), m = mode();
+  function confirmDelete(btn) {
+    if (btn.classList.contains('armed')) return true;
+    btn.classList.add('armed');
+    btn.innerHTML = icon('x') + 'Delete?';
+    clearTimeout(armedTimer);
+    armedTimer = setTimeout(function () {
+      if (document.contains(btn)) { btn.classList.remove('armed'); btn.innerHTML = icon('x'); }
+    }, 3500);
+    return false;
+  }
+  // After deleting a row, keep the highlight on a neighbouring row.
+  function focusNeighbour(btn, fallback) {
     var row = btn.closest('.todo-row');
     var next = row && (row.nextElementSibling || row.previousElementSibling);
-    if (next) Nav.focus(next.querySelector('.todo'));
-    else Nav.focus(document.querySelector('.add-btn'));
+    Nav.focus(next && next.querySelector('.todo') ? next.querySelector('.todo') : fallback);
+  }
+
+  function deleteTodo(btn) {
+    if (!confirmDelete(btn)) return;
+    var id = btn.getAttribute('data-id'), m = mode();
+    focusNeighbour(btn, document.querySelector('[data-action="add-task"]'));
     if (m === 'local') {
       localTodos = localTodos.filter(function (t) { return String(t.id) !== id; });
       saveLocal(); renderTodos(true); return;
@@ -569,8 +803,313 @@
     if (!t._edited) return;
     e.preventDefault();
     t._edited = false;
-    if (t.id === 'taskTitle') submitTask(); else Nav.move('down');
+    if (t.id === 'taskTitle') submitTask();
+    else if (t.id === 'mealText') saveMealFromModal();
+    else if (t.id === 'groceryText') submitGrocery();
+    else Nav.move('down');
   });
+
+  // ------------------------------------------------------------------ pages
+  var ui = { page: 'home', monthOffset: 0, weekOffset: 0 };
+  var PAGE_NAMES = ['home', 'month', 'meals'];
+
+  function showPage(name) {
+    if (PAGE_NAMES.indexOf(name) < 0) name = 'home';
+    ui.page = name;
+    var pages = document.querySelectorAll('.page');
+    for (var i = 0; i < pages.length; i++) pages[i].hidden = pages[i].getAttribute('data-page') !== name;
+    var tabs = document.querySelectorAll('.tab');
+    for (var j = 0; j < tabs.length; j++) {
+      if (tabs[j].getAttribute('data-page') === name) tabs[j].setAttribute('aria-current', 'page');
+      else tabs[j].removeAttribute('aria-current');
+    }
+    PAGE_NAMES.forEach(function (p) { body.classList.toggle('on-' + p, p === name); });
+    if (name === 'home') { renderCalendar(); renderTodos(); renderNextMeals(); }
+    if (name === 'month') { renderMonth(); loadMonth(); }
+    if (name === 'meals') { renderMealsPage(); renderGroceries(); ensureWeekLoaded(); }
+  }
+
+  function mondayOf(d) {
+    var x = startOfDay(d);
+    return addDays(x, -((x.getDay() + 6) % 7)); // Monday = start of week
+  }
+
+  // ------------------------------------------------------------------ meals
+  var SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
+  var SLOT_NAME = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Evening snack', dinner: 'Dinner' };
+
+  // Before 10am: today's breakfast + lunch. 10am–9pm: evening snack + dinner. After 9pm: tomorrow's breakfast + lunch.
+  function nextMealSlots(now) {
+    var h = now.getHours();
+    if (h < 10) return { date: ymd(now), label: 'Today', slots: ['breakfast', 'lunch'] };
+    if (h < 21) return { date: ymd(now), label: 'Today', slots: ['snack', 'dinner'] };
+    return { date: ymd(addDays(now, 1)), label: 'Tomorrow', slots: ['breakfast', 'lunch'] };
+  }
+
+  function renderNextMeals() {
+    var n = nextMealSlots(new Date()), day = state.meals[n.date] || {};
+    $('nextMealsSub').textContent = n.label;
+    rerender($('nextMeals'), n.slots.map(function (s) {
+      var text = day[s] || '';
+      return '<button class="meal-tile focusable" data-action="meal" data-date="' + n.date + '" data-slot="' + s + '" data-key="nm:' + s + '">' +
+        '<span class="meal-slot">' + SLOT_NAME[s] + '</span>' +
+        '<span class="meal-dish' + (text ? '' : ' empty') + '">' + esc(text || 'Not planned yet') + '</span></button>';
+    }).join(''));
+  }
+
+  function weekStart() { return addDays(mondayOf(new Date()), ui.weekOffset * 7); }
+
+  function renderMealsPage() {
+    var ws = weekStart(), we = addDays(ws, 6), today = ymd(new Date());
+    var range = ws.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' – ' +
+      we.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    var label = ui.weekOffset === 0 ? 'This week' : ui.weekOffset === 1 ? 'Next week' : ui.weekOffset === -1 ? 'Last week' : 'Week';
+    $('weekTitle').textContent = label + ' · ' + range;
+    var html = '<div></div>' + SLOTS.map(function (s) { return '<div class="mt-head">' + SLOT_NAME[s] + '</div>'; }).join('');
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(ws, i), key = ymd(d), isToday = key === today, day = state.meals[key] || {};
+      html += '<div class="mt-day' + (isToday ? ' today' : '') + '"><b>' + esc(d.toLocaleDateString(undefined, { weekday: 'short' })) +
+        '</b><small>' + esc(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })) + '</small></div>';
+      SLOTS.forEach(function (s) {
+        var text = day[s] || '';
+        html += '<button class="mt-cell focusable' + (isToday ? ' today' : '') + (text ? '' : ' empty') + '" data-action="meal" data-date="' + key +
+          '" data-slot="' + s + '" data-label="' + SLOT_NAME[s] + '" data-key="mt:' + key + ':' + s + '"><span>' + esc(text || '+ Add') + '</span></button>';
+      });
+    }
+    rerender($('mealTable'), html);
+  }
+
+  // Fetch the shown week from the sheet if we don't have it yet (weeks beyond the 2 the dashboard loads).
+  function ensureWeekLoaded() {
+    if (mode() !== 'google') return;
+    var ws = weekStart(), missing = false;
+    for (var i = 0; i < 7; i++) if (!state.mealDates[ymd(addDays(ws, i))]) missing = true;
+    if (!missing) return;
+    api('meals', { from: ymd(ws), days: 7 })
+      .then(function (j) { mergeMeals(j.meals); if (ui.page === 'meals') renderMealsPage(); renderNextMeals(); })
+      .catch(function (err) { toast('Meals: ' + err.message, 5000); });
+  }
+
+  function openMealEdit(date, slot) {
+    var cur = (state.meals[date] || {})[slot] || '';
+    var d = parseYmd(date);
+    openModal(
+      '<h3>' + SLOT_NAME[slot] + '</h3>' +
+      '<p class="lead">' + esc(d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })) +
+      ' · press OK on the box to type</p>' +
+      '<form autocomplete="off" onsubmit="return false">' +
+      '<label class="field"><span>Dish</span><input class="input" id="mealText" maxlength="120" placeholder="e.g. Poha and chai" value="' + esc(cur) + '"' +
+      ' data-date="' + date + '" data-slot="' + slot + '" data-autofocus></label>' +
+      '<div class="btn-row">' +
+      (cur ? '<button type="button" class="btn focusable" data-action="meal-clear">Clear</button>' : '') +
+      '<button type="button" class="btn focusable" data-action="close">Cancel</button>' +
+      '<button type="button" class="btn primary focusable" data-action="meal-save">Save</button></div></form>');
+  }
+
+  function saveMealFromModal(clear) {
+    var input = $('mealText');
+    if (!input) return;
+    var date = input.getAttribute('data-date'), slot = input.getAttribute('data-slot');
+    var text = clear ? '' : input.value.trim();
+    closeModal();
+    setMeal(date, slot, text);
+  }
+
+  function setMeal(date, slot, text) {
+    var m = mode();
+    var day = state.meals[date] || (state.meals[date] = { breakfast: '', lunch: '', snack: '', dinner: '' });
+    var old = day[slot] || '';
+    if (old === text) return;
+    day[slot] = text;
+    renderNextMeals();
+    if (ui.page === 'meals') renderMealsPage();
+    if (m === 'local') { lsSet(LS.meals, state.meals); return; }
+    if (m === 'demo') return;
+    api('meal.set', { date: date, slot: slot, text: text })
+      .catch(function (err) {
+        day[slot] = old;
+        renderNextMeals();
+        if (ui.page === 'meals') renderMealsPage();
+        toast('Couldn’t save meal — ' + err.message, 5000);
+      });
+  }
+
+  // ------------------------------------------------------------------ groceries
+  function saveLocalGroceries() { if (mode() === 'local') lsSet(LS.groceries, state.groceries); }
+
+  function renderGroceries() {
+    var list = state.groceries, html = '';
+    if (!list.length) {
+      html = '<div class="empty"><strong>Nothing to buy</strong>Choose <em>Add item</em>' +
+        (mode() === 'google' ? ', or add to the Groceries tab of the shared sheet on your phone.' : '.') + '</div>';
+    }
+    list.forEach(function (g) {
+      html += '<div class="todo-row">' +
+        '<button class="todo focusable' + (g.done ? ' done' : '') + '" data-action="g-toggle" data-id="' + esc(g.id) + '" data-key="g:' + esc(g.id) + '">' +
+        '<span class="check">' + icon('check') + '</span><span class="todo-title">' + esc(g.item) + '</span></button>' +
+        '<button class="todo-del focusable" data-action="g-delete" data-id="' + esc(g.id) + '" data-key="gd:' + esc(g.id) + '" aria-label="Delete">' + icon('x') + '</button>' +
+        '</div>';
+    });
+    rerender($('groceryList'), html);
+    var left = list.filter(function (g) { return !g.done; }).length;
+    $('grocerySub').textContent = list.length ? (left ? left + ' to buy' : 'All bought') : '';
+  }
+
+  function findGrocery(id) {
+    for (var i = 0; i < state.groceries.length; i++) if (String(state.groceries[i].id) === String(id)) return state.groceries[i];
+    return null;
+  }
+
+  // Run a grocery change on the sheet; on failure put the list back and say so.
+  function syncGroceries(action, params, backup, failMsg) {
+    var m = mode();
+    if (m === 'local') { saveLocalGroceries(); return; }
+    if (m === 'demo') return;
+    api(action, params)
+      .then(function (j) { if (j.groceries) { state.groceries = j.groceries; renderGroceries(); } })
+      .catch(function (err) { state.groceries = backup; renderGroceries(); toast(failMsg + ' — ' + err.message, 5000); });
+  }
+
+  function toggleGrocery(btn) {
+    var g = findGrocery(btn.getAttribute('data-id'));
+    if (!g) return;
+    var backup = JSON.parse(JSON.stringify(state.groceries));
+    g.done = !g.done;
+    renderGroceries();
+    syncGroceries('grocery.toggle', { id: g.id, done: g.done ? 1 : 0 }, backup, 'Couldn’t update item');
+  }
+
+  function deleteGrocery(btn) {
+    if (!confirmDelete(btn)) return;
+    var id = btn.getAttribute('data-id');
+    focusNeighbour(btn, document.querySelector('[data-action="add-grocery"]'));
+    var backup = state.groceries.slice();
+    state.groceries = state.groceries.filter(function (g) { return String(g.id) !== id; });
+    renderGroceries();
+    syncGroceries('grocery.delete', { id: id }, backup, 'Couldn’t delete item');
+  }
+
+  function clearTickedGroceries() {
+    var backup = state.groceries.slice();
+    var before = state.groceries.length;
+    state.groceries = state.groceries.filter(function (g) { return !g.done; });
+    if (state.groceries.length === before) { toast('Nothing ticked yet'); return; }
+    renderGroceries();
+    toast('Cleared ' + (before - state.groceries.length) + ' ticked item' + (before - state.groceries.length > 1 ? 's' : ''));
+    syncGroceries('grocery.clear', {}, backup, 'Couldn’t clear items');
+  }
+
+  function openAddGrocery() {
+    openModal(
+      '<h3>Add to groceries</h3>' +
+      '<p class="lead">Press OK on the box to type' + (mode() === 'google' ? ' — or add it in the shared sheet on your phone.' : '.') + '</p>' +
+      '<form autocomplete="off" onsubmit="return false">' +
+      '<label class="field"><span>Item</span><input class="input" id="groceryText" maxlength="120" placeholder="e.g. Milk 2L" data-autofocus></label>' +
+      '<div class="btn-row"><button type="button" class="btn focusable" data-action="close">Cancel</button>' +
+      '<button type="button" class="btn primary focusable" data-action="submit-grocery">' + icon('plus') + 'Add</button></div></form>');
+  }
+
+  function submitGrocery() {
+    var input = $('groceryText');
+    var item = input ? input.value.trim() : '';
+    if (!item) { toast('Type an item first'); if (input) Nav.focus(input); return; }
+    closeModal();
+    var backup = state.groceries.slice();
+    state.groceries.push({ id: 'tmp' + Date.now(), item: item, done: false });
+    renderGroceries();
+    toast('Added ' + item);
+    syncGroceries('grocery.add', { item: item }, backup, 'Couldn’t add item');
+  }
+
+  // ------------------------------------------------------------------ month calendar
+  function monthStart() { var n = new Date(); return new Date(n.getFullYear(), n.getMonth() + ui.monthOffset, 1); }
+  function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+
+  function monthEvents() {
+    var m = mode();
+    if (m === 'demo') return state.events;
+    if (m === 'local') return [];
+    var c = state.monthCache[monthKey(monthStart())];
+    return c ? c.events : (ui.monthOffset === 0 ? state.events : []);
+  }
+
+  function loadMonth(force) {
+    if (mode() !== 'google') return;
+    var ms = monthStart(), key = monthKey(ms), c = state.monthCache[key];
+    if (!force && c && Date.now() - c.at < 10 * 60e3) return; // fresh enough
+    api('events', { from: mondayOf(ms).toISOString(), days: 42 })
+      .then(function (j) {
+        state.monthCache[key] = { at: Date.now(), events: j.events || [] };
+        if (ui.page === 'month' && monthKey(monthStart()) === key) renderMonth();
+      })
+      .catch(function (err) { toast('Month: ' + err.message, 5000); });
+  }
+
+  function eventsOnDay(events, d) {
+    var s0 = startOfDay(d), s1 = addDays(s0, 1);
+    return events.filter(function (ev) {
+      if (ev.allDay) {
+        var a = parseYmd(ev.startDate), b = parseYmd(ev.endDate || ev.startDate);
+        if (b <= a) b = addDays(a, 1);
+        return a < s1 && b > s0;
+      }
+      var st = new Date(ev.start), en = new Date(ev.end);
+      return st < s1 && en > s0;
+    }).sort(function (x, y) {
+      if (!!x.allDay !== !!y.allDay) return x.allDay ? -1 : 1;
+      return (x.start || '') < (y.start || '') ? -1 : 1;
+    });
+  }
+
+  function renderMonth() {
+    var ms = monthStart(), gs = mondayOf(ms), today = ymd(new Date()), events = monthEvents();
+    $('monthTitle').textContent = ms.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    var dow = '';
+    for (var k = 0; k < 7; k++) dow += '<div>' + esc(addDays(gs, k).toLocaleDateString(undefined, { weekday: 'short' })) + '</div>';
+    $('monthDow').innerHTML = dow;
+    // Landscape cells are wide but short (2 events + "more"); portrait cells are narrow but tall
+    // (4 events, names wrap, no time so the name gets the room).
+    var portrait = body.classList.contains('portrait'), maxShow = portrait ? 4 : 2, html = '';
+    for (var i = 0; i < 42; i++) {
+      var d = addDays(gs, i), key = ymd(d), list = eventsOnDay(events, d);
+      var cls = (d.getMonth() !== ms.getMonth() ? ' other' : '') + (key === today ? ' today' : '') + (i % 7 >= 5 ? ' weekend' : '');
+      html += '<div class="mday focusable' + cls + '" tabindex="0" data-action="day" data-date="' + key + '" data-key="md:' + key + '">' +
+        '<div class="mhead"><div class="mnum">' + d.getDate() + '</div>' +
+        (!MOBILE && list.length > maxShow ? '<div class="mmore">+' + (list.length - maxShow) + ' more</div>' : '') + '</div>';
+      if (MOBILE) { // phones: coloured dots, tap the day for details
+        html += '<div class="mdots">' + list.slice(0, 5).map(function (ev) {
+          return '<i style="--c:' + safeColor(ev.color) + '"></i>';
+        }).join('') + '</div></div>';
+        continue;
+      }
+      list.slice(0, maxShow).forEach(function (ev) {
+        html += '<div class="mev" style="--c:' + safeColor(ev.color) + '"><span>' +
+          (ev.allDay || portrait ? '' : esc(fmtTime(new Date(ev.start)).replace(/:00(?= )/, '').replace(/ (AM|PM)$/, function (x) { return x.toLowerCase().trim(); })) + ' ') +
+          esc(ev.title) + '</span></div>';
+      });
+      html += '</div>';
+    }
+    rerender($('monthGrid'), html);
+  }
+
+  function openDay(date) {
+    var d = parseYmd(date), list = eventsOnDay(monthEvents(), d), rows = '';
+    ui.dayEvents = list;
+    ui.dayDate = date;
+    list.forEach(function (ev, i) {
+      var time = ev.allDay ? 'All day' : esc(fmtTime(new Date(ev.start))) + '<small>' + esc(fmtTime(new Date(ev.end))) + '</small>';
+      var meta = [ev.location, ev.calendar].filter(Boolean).join(' · ');
+      rows += '<div class="event focusable" tabindex="0" data-action="day-event" data-i="' + i + '" style="--c:' + safeColor(ev.color) + '">' +
+        '<div class="ev-time">' + time + '</div><div class="ev-bar"></div>' +
+        '<div class="ev-main"><div class="ev-title">' + esc(ev.title) + '</div>' + (meta ? '<div class="ev-meta">' + esc(meta) + '</div>' : '') + '</div></div>';
+    });
+    openModal(
+      '<h3>' + esc(d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })) + '</h3>' +
+      (rows || '<p class="lead">Nothing on this day.</p>') +
+      '<div class="btn-row">' +
+      (mode() !== 'local' ? '<button class="btn focusable" data-action="day-add-event">' + icon('plus') + 'Add event</button>' : '') +
+      '<button class="btn primary focusable" data-action="close" data-autofocus>Close</button></div>');
+  }
 
   // ------------------------------------------------------------------ settings
   function seg(name, options, current) {
@@ -644,6 +1183,9 @@
     if (weatherChanged) loadWeather();
     if (apiChanged) {
       state.events = []; state.tasks = []; state.updated = null; state.errShown = false;
+      state.meals = {}; state.mealDates = {}; state.monthCache = {};
+      state.groceries = [];
+      if (mode() === 'local') { mergeMeals(objToMealList(lsGet(LS.meals, {}))); state.groceries = lsGet(LS.groceries, []); }
       loadDashboard();
       loadPhotos(true);
     }
@@ -788,6 +1330,7 @@
   }
 
   function loadPhotos(force) {
+    if (MOBILE) return; // phones: no slideshow, saves data and battery
     if (mode() === 'demo') { setPhotos(DEMO_PHOTOS); return; }
     if (mode() !== 'google') { setPhotos([]); return; }
     api('photos', force ? { refresh: 1 } : {})
@@ -803,7 +1346,7 @@
   // ------------------------------------------------------------------ photo mode
   var photoReturnFocus = null;
   function enterPhotoMode(auto) {
-    if (body.classList.contains('photo-mode')) return;
+    if (MOBILE || body.classList.contains('photo-mode')) return;
     photoReturnFocus = document.activeElement;
     body.classList.add('photo-mode');
     Nav.blur();
@@ -849,7 +1392,10 @@
         break;
       case 'refresh':
         toast('Refreshing…');
+        state.monthCache = {}; state.mealDates = {};
         loadDashboard(); loadPhotos(false); loadWeather();
+        if (ui.page === 'month') loadMonth(true);
+        if (ui.page === 'meals') ensureWeekLoaded();
         break;
       case 'settings': openSettings(); break;
       case 'add-task': openAddTask(); break;
@@ -859,9 +1405,39 @@
       case 'toggle': toggleTodo(el); break;
       case 'delete': deleteTodo(el); break;
       case 'event': openEvent(+el.getAttribute('data-idx')); break;
+      // calendar editing
+      case 'add-event': openEventForm({}); break;
+      case 'day-add-event': openEventForm({ date: ui.dayDate }); break;
+      case 'day-event': openEventDetail((ui.dayEvents || [])[+el.getAttribute('data-i')]); break;
+      case 'event-edit': openEventForm({ ev: ui.detailEvent }); break;
+      case 'event-save': saveEventFromForm(); break;
+      case 'event-delete': deleteEventFromDetail(el); break;
+      // pages
+      case 'page': showPage(el.getAttribute('data-page')); break;
+      case 'month-prev': ui.monthOffset--; renderMonth(); loadMonth(); break;
+      case 'month-next': ui.monthOffset++; renderMonth(); loadMonth(); break;
+      case 'month-today': ui.monthOffset = 0; renderMonth(); loadMonth(); break;
+      case 'day': openDay(el.getAttribute('data-date')); break;
+      case 'week-prev': ui.weekOffset--; renderMealsPage(); ensureWeekLoaded(); break;
+      case 'week-next': ui.weekOffset++; renderMealsPage(); ensureWeekLoaded(); break;
+      case 'week-today': ui.weekOffset = 0; renderMealsPage(); ensureWeekLoaded(); break;
+      // meals
+      case 'meal': openMealEdit(el.getAttribute('data-date'), el.getAttribute('data-slot')); break;
+      case 'meal-save': saveMealFromModal(false); break;
+      case 'meal-clear': saveMealFromModal(true); break;
+      // groceries
+      case 'g-toggle': toggleGrocery(el); break;
+      case 'g-delete': deleteGrocery(el); break;
+      case 'add-grocery': openAddGrocery(); break;
+      case 'submit-grocery': submitGrocery(); break;
+      case 'clear-groceries': clearTickedGroceries(); break;
       case 'seg': {
         var sibs = el.parentNode.querySelectorAll('[data-action="seg"]');
         for (var i = 0; i < sibs.length; i++) sibs[i].setAttribute('aria-pressed', String(sibs[i] === el));
+        if (el.getAttribute('data-name') === 'allday') { // all-day events have no times
+          var tf = sheet.querySelectorAll('.ev-time-field');
+          for (var k = 0; k < tf.length; k++) tf[k].hidden = el.getAttribute('data-val') === '1';
+        }
         break;
       }
     }
@@ -888,6 +1464,12 @@
       enterPhotoMode(true);
     }
   }, 5000);
+  // Phones: drop the highlight after a tap so buttons don't stay lit up.
+  document.addEventListener('click', function (e) {
+    if (!MOBILE) return;
+    var a = document.activeElement;
+    if (a && a !== document.body && a.tagName === 'BUTTON' && modal.hidden) setTimeout(function () { a.blur(); }, 150);
+  });
   // On a PC, moving the mouse also counts as "someone is using it".
   var lastMove = 0;
   document.addEventListener('mousemove', function () {
@@ -897,7 +1479,7 @@
 
   var wakeLock = null;
   function keepAwake() {
-    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    if (MOBILE || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
     navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () { /* not supported here */ });
   }
   document.addEventListener('visibilitychange', function () {
@@ -949,15 +1531,47 @@
         { id: 't3', title: 'Book train tickets for the trip', done: false, due: ymd(addDays(now, 1)), position: '3' },
         { id: 't4', title: 'Call the plumber about the kitchen tap', done: false, position: '4' },
         { id: 't5', title: 'Water the plants', done: true, completed: new Date().toISOString(), position: '5' }
+      ],
+      meals: demoMeals(mondayOf(now)),
+      groceries: [
+        { id: 'g1', item: 'Milk 2L', done: false },
+        { id: 'g2', item: 'Eggs (12)', done: false },
+        { id: 'g3', item: 'Tomatoes 1kg', done: true },
+        { id: 'g4', item: 'Basmati rice', done: false },
+        { id: 'g5', item: 'Paneer 200g', done: false },
+        { id: 'g6', item: 'Bananas', done: false }
       ]
     };
   }
 
+  function demoMeals(monday) {
+    var plan = [
+      ['Poha and chai', 'Dal, rice and salad', 'Fruit chaat', 'Paneer tikka with roti'],
+      ['Idli sambar', 'Rajma chawal', 'Roasted makhana', 'Veg pulao and raita'],
+      ['Upma', 'Chole with jeera rice', 'Sprouts salad', 'Palak paneer and roti'],
+      ['Paratha and curd', 'Veg biryani', 'Dhokla', 'Dal tadka and rice'],
+      ['Oats with fruit', 'Kadhi chawal', 'Bhel puri', 'Pasta night'],
+      ['Masala dosa', 'Lunch out', 'Samosa', 'Homemade pizza'],
+      ['Pancakes', 'Aloo paratha', '', 'Khichdi']
+    ];
+    var out = [];
+    for (var w = 0; w < 2; w++) {
+      for (var i = 0; i < 7; i++) {
+        var p = plan[i];
+        out.push({ date: ymd(addDays(monday, w * 7 + i)), breakfast: p[0], lunch: p[1], snack: p[2], dinner: w ? '' : p[3] });
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------------ start
   restoreCache();
+  if (mode() === 'local') { mergeMeals(objToMealList(lsGet(LS.meals, {}))); state.groceries = lsGet(LS.groceries, []); }
+  showPage('home');
   tick(true);
   setInterval(tick, 1000);
   renderTodos(true);
+  renderGroceries();
   if (mode() === 'google') setPhotos(lsGet(LS.photos, []));
   loadDashboard();
   loadPhotos(false);

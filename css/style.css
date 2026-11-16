@@ -74,17 +74,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .photo-mode .scrim { opacity: 0.15; }
 
-/* ---------- Layout ---------- */
+/* ---------- Layout: pages on top, bottom bar below ---------- */
 .app {
   position: fixed; top: 0; right: 0; bottom: 0; left: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 41rem; gap: 3rem;
-  padding: var(--safe-y) var(--safe-x);
+  display: flex; flex-direction: column; gap: 1.4rem;
+  padding: var(--safe-y) var(--safe-x) 2rem;
   box-sizing: border-box;
   transition: opacity 0.8s ease;
 }
 .photo-mode .app { opacity: 0; pointer-events: none; }
-.left { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; }
+.pages { flex: 1; min-height: 0; position: relative; }
+.page { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+
+/* Page 1 — Home */
+.page-home { display: grid; grid-template-columns: minmax(0, 1fr) 41rem; gap: 3rem; }
+.left { display: flex; flex-direction: column; justify-content: space-between; gap: 1.6rem; min-height: 0; }
 .right { display: flex; flex-direction: column; gap: 1.6rem; min-height: 0; }
+
+/* Busier pages get a darker scrim so text stays readable over photos */
+body.on-month .scrim, body.on-meals .scrim { background: rgba(0, 0, 0, 0.55); }
 
 /* ---------- Clock / date / weather ---------- */
 .hero { text-shadow: 0 0.15rem 1.6rem rgba(0, 0, 0, 0.45); }
@@ -103,8 +111,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .w-desc { font-size: 1.55rem; font-weight: 600; }
 .w-range { font-size: 1.3rem; color: var(--muted); }
 
-/* ---------- Toolbar ---------- */
-.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+/* ---------- Bottom bar: page tabs + tools ---------- */
+.bottombar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 1rem; flex: none; }
+.tabs {
+  display: flex; gap: 0.5rem; padding: 0.45rem; border-radius: 999px;
+  background: rgba(13, 15, 19, 0.62); border: 1px solid var(--line);
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 0.7rem;
+  padding: 0.85rem 1.6rem; border: 0; border-radius: 999px; background: transparent;
+  font-size: 1.4rem; font-weight: 700; color: var(--muted);
+}
+.tab .ic { font-size: 1.7rem; }
+.tab[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.tab[aria-current="page"]:focus, .tab[aria-current="page"]:hover { background: var(--accent); box-shadow: 0 0 0 0.22rem #fff; }
+.tab:focus, .tab:hover { color: var(--text); }
+.tools { display: flex; gap: 1rem; margin-left: auto; }
 .tool {
   display: inline-flex; align-items: center; gap: 0.75rem;
   padding: 0.95rem 1.5rem; border-radius: 999px;
@@ -112,7 +134,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 1.35rem; font-weight: 600;
 }
 .tool .ic { font-size: 1.7rem; }
-.status { flex-basis: 100%; min-height: 1.6rem; font-size: 1.2rem; color: var(--faint); margin: -0.2rem 0 0 0.6rem; text-shadow: 0 0.1rem 0.8rem rgba(0,0,0,0.6); }
+.status { flex-basis: 100%; min-height: 1.5rem; font-size: 1.15rem; color: var(--faint); margin: -0.2rem 0 0 0.6rem; text-shadow: 0 0.1rem 0.8rem rgba(0,0,0,0.6); }
 .status.err { color: var(--danger); }
 
 /* ---------- Focus (the most important thing on a TV) ---------- */
@@ -269,9 +291,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------- Portrait layout (TV on its side, or any tall screen) ----------
    Clock on top, a window of photo in the middle, calendar + to-do below, buttons at the bottom.
    In portrait 1rem = 1/67.5 of the screen width (16px on a 1080×1920 screen). */
-.portrait .app { display: flex; flex-direction: column; gap: 2rem; padding: 3rem 3.4rem 2.6rem; }
-.portrait .left { display: contents; }
-.portrait .hero { order: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; }
+.portrait .app { padding: 3rem 3.4rem 2.2rem; }
+.portrait .page-home { display: flex; flex-direction: column; gap: 1.6rem; }
+.portrait .left { justify-content: flex-start; flex: none; }
+.portrait .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; }
 .portrait .hero > * { grid-column: 1; }
 .portrait .clock { font-size: 10rem; }
 .portrait .date { font-size: 2.2rem; }
@@ -280,8 +303,187 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex-direction: column; align-items: flex-end; gap: 0.5rem; margin: 0 0 0.5rem; text-align: right;
 }
 .portrait .w-text { align-items: flex-end; }
-.portrait .right { order: 2; margin-top: auto; flex: 0 0 auto; height: 63rem; }
-.portrait .toolbar { order: 3; }
-.portrait .scrim {
+.portrait .right { margin-top: auto; flex: 0 0 auto; height: 54rem; }
+.portrait.on-home .scrim {
   background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.08) 24%, rgba(0,0,0,0.1) 42%, rgba(0,0,0,0.6) 100%);
 }
+/* Portrait: icon-only tool buttons so tabs + tools fit on one row */
+.portrait .tool .lbl { display: none; }
+.portrait .tool { padding: 0.95rem 1.1rem; }
+.portrait .tools { gap: 0.7rem; }
+/* Portrait month/meals: stack meal table above groceries */
+.portrait .page-meals { flex-direction: column; }
+.portrait .meals-panel { flex: 0 0 auto; }
+.portrait .grocery-panel { width: auto; flex: 1 1 0; }
+.portrait .month-grid { grid-auto-rows: minmax(0, 1fr); }
+
+/* ---------- Next meals card (Home) ---------- */
+.next-meals { flex: none; max-width: 58rem; }
+.meal-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 0.2rem 1rem 1.2rem; }
+.meal-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; min-width: 0;
+  padding: 0.9rem 1rem; border: 0; border-radius: 1rem; background: rgba(255, 255, 255, 0.05); text-align: left;
+}
+.meal-slot { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.meal-dish {
+  font-size: 1.6rem; font-weight: 600; line-height: 1.25; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.meal-dish.empty { color: var(--faint); font-weight: 500; }
+
+/* ---------- Page header (Month / Meals) ---------- */
+.page-head { display: flex; align-items: center; gap: 1.2rem; padding: 1.3rem 1.8rem 0.9rem; }
+.page-title { margin: 0; font-size: 2.4rem; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.head-actions { display: flex; gap: 0.6rem; margin-left: 0.8rem; }
+.head-actions .btn { padding: 0.7rem 1.2rem; font-size: 1.3rem; }
+.head-actions .ic { font-size: 1.6rem; }
+.page-clock { margin-left: auto; font-family: Outfit, Manrope, sans-serif; font-size: 2.4rem; font-weight: 300; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Page 2: Month ---------- */
+.page-month { display: flex; }
+.month-panel { flex: 1; }
+.dow-row, .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; padding: 0 1.4rem; }
+.dow-row { padding-bottom: 0.5rem; }
+.dow-row div { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-left: 0.8rem; }
+.month-grid { flex: 1; min-height: 0; grid-template-rows: repeat(6, minmax(0, 1fr)); padding-bottom: 1.4rem; }
+.mday {
+  display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; min-height: 0; overflow: hidden;
+  padding: 0.6rem 0.7rem; border-radius: 0.9rem; background: rgba(255, 255, 255, 0.05);
+}
+.mday.weekend { background: rgba(255, 255, 255, 0.03); }
+.mday.other { opacity: 0.4; }
+.mnum { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; align-self: flex-start; padding: 0.05rem 0.5rem; border-radius: 999px; }
+.mday.today .mnum { color: var(--accent-ink); background: var(--accent); }
+.mev { display: flex; align-items: center; gap: 0.45rem; min-width: 0; font-size: 1.1rem; font-weight: 600; }
+.mev::before { content: ''; width: 0.55rem; height: 0.55rem; flex: none; border-radius: 50%; background: var(--c, var(--accent)); }
+.mev span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mmore { font-size: 1.05rem; font-weight: 600; color: var(--faint); }
+
+/* ---------- Page 3: Meal planner + groceries ---------- */
+.page-meals { display: flex; gap: 2rem; }
+.meals-panel { flex: 1; min-width: 0; }
+.grocery-panel { width: 36rem; flex: none; }
+.meal-table {
+  flex: 1; min-height: 0; display: grid; gap: 0.5rem; padding: 0 1.4rem 1.4rem;
+  grid-template-columns: 9rem repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto repeat(7, minmax(0, 1fr));
+}
+.mt-head { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0.2rem 0.9rem; }
+.mt-day { display: flex; flex-direction: column; justify-content: center; padding: 0 0.8rem; border-radius: 0.9rem; min-height: 0; }
+.mt-day b { font-size: 1.45rem; }
+.mt-day small { font-size: 1.1rem; font-weight: 600; color: var(--faint); }
+.mt-day.today { background: rgba(245, 185, 74, 0.16); }
+.mt-day.today b { color: var(--accent); }
+.mt-cell {
+  display: flex; align-items: center; min-width: 0; min-height: 0; overflow: hidden;
+  padding: 0.5rem 0.9rem; border: 0; border-radius: 0.9rem; background: rgba(255, 255, 255, 0.05);
+  text-align: left; font-size: 1.35rem; font-weight: 600; line-height: 1.25;
+}
+.mt-cell span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mt-cell.today { background: rgba(245, 185, 74, 0.1); }
+.mt-cell.empty { color: var(--faint); font-weight: 500; }
+.grocery-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; padding: 0.2rem 1.6rem 1.5rem; }
+.grocery-actions .add-btn { margin: 0; }
+.portrait .meal-table { grid-template-rows: auto repeat(7, 6.4rem); }
+.portrait .next-meals { max-width: none; }
+.head-actions .btn { white-space: nowrap; }
+.portrait .meals-panel .page-clock { display: none; }
+.portrait .page-title { font-size: 2.2rem; }
+.portrait .mev { align-items: flex-start; }
+.portrait .mev::before { margin-top: 0.45rem; }
+.portrait .mev span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+.mhead { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.mhead .mmore { white-space: nowrap; }
+
+/* ---------- Calendar editing ---------- */
+.btn.danger { color: var(--danger); }
+.btn.danger.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+.cal-panel .add-btn { margin-top: 0.4rem; }
+.input[type="date"], .input[type="time"] { color-scheme: dark; min-height: 4.4rem; }
+
+/* ================= Phone layout (body.mobile) =================
+   Same page, opened in a phone browser: normal page scrolling, stacked panels,
+   tabs fixed at the bottom like an app. 1rem ≈ 10px here. */
+html.mobile-root, html.mobile-root body { height: auto; min-height: 100%; overflow: auto; }
+body.mobile {
+  background:
+    radial-gradient(40rem 30rem at 20% 0%, rgba(64, 104, 112, 0.45), transparent 70%),
+    radial-gradient(40rem 30rem at 90% 100%, rgba(150, 96, 52, 0.35), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+  user-select: auto;
+}
+.mobile #stage { position: static; width: auto; height: auto; overflow: visible; }
+.mobile .slideshow, .mobile .mini-clock, .mobile .night-dim { display: none; }
+.mobile .app { position: static; display: block; padding: 2rem 1.4rem 11rem; }
+.mobile .pages, .mobile .page { position: static; }
+.mobile .page[hidden] { display: none !important; }
+.mobile .page-home, .mobile .page-month, .mobile .page-meals { display: flex; flex-direction: column; gap: 1.6rem; }
+.mobile .left, .mobile .right { display: flex; flex-direction: column; gap: 1.6rem; flex: none; height: auto; margin: 0; }
+.mobile .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1.2rem; }
+.mobile .hero > * { grid-column: 1; }
+.mobile .clock { font-size: 7rem; }
+.mobile .ampm { font-size: 2rem; }
+.mobile .date { font-size: 2rem; }
+.mobile .weather { grid-column: 2; grid-row: 1 / span 3; align-self: end; flex-direction: column; align-items: flex-end; gap: 0.4rem; margin: 0 0 0.4rem; text-align: right; }
+.mobile .weather .w-icon, .mobile .w-temp { font-size: 3.2rem; }
+.mobile .w-text { align-items: flex-end; }
+.mobile .next-meals { max-width: none; }
+.mobile .panel { overflow: visible; }
+.mobile .cal-panel, .mobile .todo-panel, .mobile .meals-panel, .mobile .grocery-panel, .mobile .month-panel { flex: none; width: auto; }
+.mobile .scroll { flex: none; overflow: visible; -webkit-mask-image: none; mask-image: none; padding-bottom: 0.6rem; }
+.mobile .todo-del { opacity: 1; }
+.mobile .input { font-size: 16px; } /* stops iPhones zooming in on text boxes */
+
+/* bottom tab bar */
+.mobile .bottombar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; flex-wrap: nowrap; gap: 0.4rem;
+  padding: 0.6rem 0.8rem calc(0.6rem + env(safe-area-inset-bottom));
+  background: rgba(14, 16, 20, 0.94); border-top: 1px solid var(--line);
+}
+.mobile .tabs { flex: 1; justify-content: space-around; background: none; border: 0; padding: 0; }
+.mobile .tab { flex: 1; flex-direction: column; gap: 0.25rem; padding: 0.6rem 0.4rem; font-size: 1.15rem; border-radius: 1.2rem; justify-content: center; }
+.mobile .tab .ic { font-size: 2.2rem; }
+.mobile .tools { margin: 0; gap: 0.4rem; }
+.mobile .tool[data-action="photo-mode"], .mobile .tool[data-action="next-photo"] { display: none; }
+.mobile .tool { padding: 1rem; }
+.mobile .tool .lbl { display: none; }
+.mobile .tool .ic { font-size: 2rem; }
+.mobile .status { display: none; }
+
+/* page headers */
+.mobile .page-head { flex-wrap: wrap; padding: 1.4rem 1.4rem 0.8rem; gap: 0.8rem; }
+.mobile .page-title { font-size: 2.2rem; width: 100%; white-space: normal; }
+.mobile .head-actions { margin-left: 0; }
+.mobile .page-clock { display: none; }
+
+/* month: dots instead of titles */
+.mobile .dow-row, .mobile .month-grid { gap: 0.3rem; padding-left: 0.8rem; padding-right: 0.8rem; }
+.mobile .dow-row div { padding-left: 0.3rem; font-size: 1rem; letter-spacing: 0.06em; }
+.mobile .month-grid { grid-template-rows: none; grid-auto-rows: 6rem; padding-bottom: 1rem; }
+.mobile .mday { padding: 0.4rem; gap: 0.4rem; border-radius: 0.8rem; }
+.mobile .mnum { font-size: 1.35rem; padding: 0 0.4rem; }
+.mdots { display: flex; flex-wrap: wrap; gap: 0.3rem; padding-left: 0.3rem; }
+.mdots i { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--c, var(--accent)); }
+
+/* meals: one list per day, slot name in front of each dish */
+.mobile .meal-table { display: block; padding: 0 1rem 1rem; }
+.mobile .mt-head { display: none; }
+.mobile .mt-day { flex-direction: row; align-items: baseline; gap: 0.8rem; padding: 1.2rem 0.4rem 0.5rem; background: none; }
+.mobile .mt-day.today { background: none; }
+.mobile .mt-cell { width: 100%; margin-bottom: 0.4rem; gap: 1rem; padding: 1rem 1.1rem; }
+.mobile .mt-cell::before {
+  content: attr(data-label); width: 9.5rem; flex: none;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+
+/* dialogs slide up from the bottom */
+.mobile .modal { align-items: flex-end; }
+.mobile .sheet {
+  width: 100%; max-width: 100%; max-height: 92vh; border-radius: 2rem 2rem 0 0;
+  padding: 2.2rem 1.8rem calc(2rem + env(safe-area-inset-bottom));
+}
+.mobile .grid2 { grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+.mobile .btn-row { flex-wrap: wrap; }
+.mobile .toast { bottom: 9rem; white-space: normal; text-align: center; max-width: 85vw; }
+.mobile .mt-day { justify-content: flex-start; }
