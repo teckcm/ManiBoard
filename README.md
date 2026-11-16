@@ -44,7 +44,7 @@ The TV never signs in to Google. A small Apps Script in **your** Google account 
 ### 1. Make a Google Photos album for the TV
 1. In Google Photos, create an album (for example "TV") and add photos. Landscape photos look best.
 2. **Share → Create link → Copy.** Keep the link (`https://photos.app.goo.gl/…`).
-   New photos you add to this album show up on the TV within about 6 hours (or press **Refresh**).
+   New photos you add to this album show up within about 3 hours, or straight away with **Settings → Refresh now**.
 
 ### 2. Create the Apps Script backend
 The backend is two files: **`Settings.gs`** (your key, album link and options) and **`Code.gs`** (the logic).
@@ -74,7 +74,7 @@ When ManiBoard is updated you only replace `Code.gs`, so your settings are never
 - **Meals and groceries:** open the sheet link from step 5 → **Share** → add your partner's Gmail as **Editor**. You both install the **Google Sheets** app and open that sheet.
   - **Meals tab:** one row per day (rows for the coming weeks are added automatically). Type dishes under *Breakfast / Lunch / Evening snack / Dinner*.
   - **Groceries tab:** type an item in the *Item* column, and tick *Bought* when you've got it.
-  - Changes reach the TV within about 3 minutes, or immediately with **Refresh**. Changes made on the TV appear in the sheet straight away.
+  - Changes reach the TV within about 3 minutes, or immediately with **Settings → Refresh now**. Changes made on the TV appear in the sheet straight away.
 - **Calendar:** your partner opens **Google Calendar → Settings → Share with specific people → your Gmail → See all event details**. Accept the email you receive, and her events show on the TV with her calendar's colour. Public-holiday calendars are hidden. To also hide birthdays, add `'#contacts@'` to `EXCLUDE_CALENDARS` in `Settings.gs`.
 - **To-do:** stays in **your** Google Tasks, because Google Tasks can't be shared between accounts. Use the shared Groceries list for things you both need to see.
 - **Editing events:** new events go into your own calendars (your main calendar is the default). Only single-day, non-repeating events can be edited from the dashboard. Repeating and multi-day events show *"change it in Google Calendar"*.

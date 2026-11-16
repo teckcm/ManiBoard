@@ -93,6 +93,35 @@
   applyOrientation(true);
   window.addEventListener('resize', function () { applyOrientation(false); });
 
+  // ---- Clock font ------------------------------------------------------------------
+  // Only the chosen font is downloaded; Settings loads all of them to show previews.
+  var CLOCK_FONTS = {
+    outfit:   { label: 'Modern thin',   family: "'Outfit'",           weight: 200, css: 'Outfit:wght@200;300' },
+    poppins:  { label: 'Rounded',       family: "'Poppins'",          weight: 300, css: 'Poppins:wght@300' },
+    bebas:    { label: 'Bold tall',     family: "'Bebas Neue'",       weight: 400, css: 'Bebas+Neue' },
+    playfair: { label: 'Elegant serif', family: "'Playfair Display'", weight: 400, css: 'Playfair+Display:wght@400' },
+    mono:     { label: 'Digital',       family: "'Space Mono'",       weight: 400, css: 'Space+Mono:wght@400' },
+    manrope:  { label: 'Clean bold',    family: "'Manrope'",          weight: 700, css: null } // already loaded
+  };
+  var loadedFonts = {};
+  function loadFont(key) {
+    var f = CLOCK_FONTS[key];
+    if (!f || !f.css || loadedFonts[key]) return;
+    loadedFonts[key] = true;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=' + f.css + '&display=swap';
+    document.head.appendChild(link);
+  }
+  function applyClockFont() {
+    var key = CLOCK_FONTS[settings.clockFont] ? settings.clockFont : 'outfit';
+    var f = CLOCK_FONTS[key];
+    loadFont(key);
+    document.documentElement.style.setProperty('--clock-font', f.family + ', Outfit, Manrope, sans-serif');
+    document.documentElement.style.setProperty('--clock-weight', String(f.weight));
+  }
+  applyClockFont();
+
   // ------------------------------------------------------------------ icons
   var ICONS = {
     home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
@@ -345,6 +374,7 @@
         if (j.meals) mergeMeals(j.meals);
         if (j.groceries) state.groceries = j.groceries;
         if (j.calendars) state.calendars = j.calendars;
+        purgeOldDoneTasks(); // completed > 24 h ago → deleted
         lsSet(LS.cache, {
           events: state.events, tasks: state.tasks, meals: j.meals || [], groceries: state.groceries,
           at: Date.now(), api: settings.apiUrl
@@ -666,15 +696,41 @@
       html = '<div class="empty"><strong>All clear</strong>Nothing on the list. Choose <em>Add task</em>' +
         (mode() === 'google' ? ', or add one in Google Tasks on your phone.' : ' to add one.') + '</div>';
     }
-    list.forEach(function (t) {
-      html += '<div class="todo-row">' +
-        '<button class="todo focusable' + (t.done ? ' done' : '') + '" data-action="toggle" data-id="' + esc(t.id) + '" data-key="t:' + esc(t.id) + '">' +
-        '<span class="check">' + icon('check') + '</span><span class="todo-title">' + esc(t.title) + '</span>' + (t.done ? '' : dueLabel(t.due)) + '</button>' +
-        '<button class="todo-del focusable" data-action="delete" data-id="' + esc(t.id) + '" data-key="d:' + esc(t.id) + '" aria-label="Delete">' + icon('x') + '</button>' +
-        '</div>';
-    });
+    // Open tasks first, then a "Completed" section (cleared automatically after 24 hours).
+    var open = list.filter(function (t) { return !t.done; }), done = list.filter(function (t) { return t.done; });
+    open.forEach(function (t) { html += todoRow(t); });
+    if (done.length) {
+      html += '<div class="todo-section">Completed · ' + done.length + '<span>clears after 24 h</span></div>';
+      done.forEach(function (t) { html += todoRow(t); });
+    }
     rerender(el, html);
     updateTodoSub();
+  }
+
+  function todoRow(t) {
+    return '<div class="todo-row">' +
+      '<button class="todo focusable' + (t.done ? ' done' : '') + '" data-action="toggle" data-id="' + esc(t.id) + '" data-key="t:' + esc(t.id) + '">' +
+      '<span class="check">' + icon('check') + '</span><span class="todo-title">' + esc(t.title) + '</span>' + (t.done ? '' : dueLabel(t.due)) + '</button>' +
+      '<button class="todo-del focusable" data-action="delete" data-id="' + esc(t.id) + '" data-key="d:' + esc(t.id) + '" aria-label="Delete">' + icon('x') + '</button>' +
+      '</div>';
+  }
+
+  // Completed tasks older than 24 hours are deleted for good (in Google Tasks too).
+  var purging = {};
+  function purgeOldDoneTasks() {
+    var cutoff = Date.now() - 24 * 3600e3, m = mode();
+    if (m === 'local') return; // local list is already trimmed in visibleTodos()
+    var old = state.tasks.filter(function (t) {
+      return t.done && t.completed && new Date(t.completed).getTime() < cutoff && !purging[t.id];
+    });
+    if (!old.length) return;
+    state.tasks = state.tasks.filter(function (t) { return old.indexOf(t) < 0; });
+    if (m !== 'google') return;
+    old.forEach(function (t) {
+      purging[t.id] = true;
+      // Quietly ignore failures: another screen may already have deleted it.
+      api('task.delete', { id: t.id }).catch(function () { /* ignore */ });
+    });
   }
 
   document.addEventListener('focusin', function (e) {
@@ -692,11 +748,15 @@
     if (!t) return;
     t.done = !t.done;
     t.completed = t.done ? new Date().toISOString() : '';
-    btn.classList.toggle('done', t.done); // update in place, list re-sorts once focus leaves
-    var due = btn.querySelector('.todo-due');
-    if (due) due.style.display = t.done ? 'none' : '';
-    updateTodoSub();
-    pendingTodoRender = true;
+    // Move it to (or out of) the Completed section now, keeping the highlight at the same
+    // place in the list so several tasks can be ticked in a row with the remote.
+    var list = $('todoList'), had = list.contains(document.activeElement);
+    var buttons = list.querySelectorAll('.todo'), pos = Array.prototype.indexOf.call(buttons, btn);
+    renderTodos(true);
+    if (had) {
+      var now = list.querySelectorAll('.todo');
+      if (now.length) Nav.focus(now[Math.min(Math.max(pos, 0), now.length - 1)]);
+    }
     var m = mode();
     if (m === 'local') { saveLocal(); return; }
     if (m === 'demo') return;
@@ -1118,6 +1178,16 @@
     }).join('') + '</div>';
   }
 
+  function clockFontPicker() {
+    Object.keys(CLOCK_FONTS).forEach(loadFont); // previews
+    var cur = CLOCK_FONTS[settings.clockFont] ? settings.clockFont : 'outfit';
+    var html = seg('clockFont', Object.keys(CLOCK_FONTS).map(function (k) {
+      var f = CLOCK_FONTS[k];
+      return [k, '<span class="fsample" style="font-family:' + f.family.replace(/'/g, '&#39;') + ',sans-serif;font-weight:' + f.weight + '">10:30</span><small>' + f.label + '</small>'];
+    }), cur);
+    return html.replace('<div class="seg">', '<div class="seg fonts">');
+  }
+
   function openSettings() {
     openModal(
       '<h3>Settings</h3>' +
@@ -1132,13 +1202,16 @@
       '<div class="field"><span>Temperature</span>' + seg('tempUnit', [['celsius', '°C'], ['fahrenheit', '°F']], settings.tempUnit === 'fahrenheit' ? 'fahrenheit' : 'celsius') + '</div>' +
       '<div class="field"><span>Photo zoom</span>' + seg('kenBurns', [['1', 'On'], ['0', 'Off']], settings.kenBurns === false ? '0' : '1') + '</div>' +
       '</div>' +
+      '<div class="field"><span>Clock font</span>' + clockFontPicker() + '</div>' +
       '<div class="field"><span>Screen</span>' + seg('orientation',
         [['landscape', 'Landscape'], ['portrait-cw', 'Portrait ↻'], ['portrait-ccw', 'Portrait ↺']],
         settings.orientation === 'portrait-cw' || settings.orientation === 'portrait-ccw' ? settings.orientation : 'landscape') +
       '<div class="hint">For a TV on its side. Upside down? Pick the other portrait option.</div></div>' +
       '<div class="field"><span>Auto photo mode</span>' + seg('autoPhotoMinutes', autoPhotoOptions(), String(+settings.autoPhotoMinutes || 0)) +
       '<div class="hint">After this long with no button pressed. Any button brings the dashboard back.</div></div>' +
-      '<div class="btn-row"><button type="button" class="btn focusable" data-action="close">Cancel</button>' +
+      '<div class="btn-row">' +
+      '<button type="button" class="btn focusable btn-left" data-action="refresh">' + icon('refresh') + 'Refresh now</button>' +
+      '<button type="button" class="btn focusable" data-action="close">Cancel</button>' +
       '<button type="button" class="btn primary focusable" data-action="save-settings">Save</button></div>' +
       '</form>');
   }
@@ -1163,7 +1236,8 @@
       tempUnit: segValue('tempUnit') || 'celsius',
       kenBurns: segValue('kenBurns') !== '0',
       orientation: segValue('orientation') || 'landscape',
-      autoPhotoMinutes: Math.max(0, parseFloat(segValue('autoPhotoMinutes')) || 0)
+      autoPhotoMinutes: Math.max(0, parseFloat(segValue('autoPhotoMinutes')) || 0),
+      clockFont: segValue('clockFont') || 'outfit'
     };
     var rotChanged = next.orientation !== (settings.orientation || 'landscape');
     if (next.apiUrl && !/^https:\/\//i.test(next.apiUrl)) { toast('The Apps Script URL should start with https://'); return; }
@@ -1175,6 +1249,7 @@
     Object.assign(settings, next);
     closeModal();
     toast('Settings saved');
+    applyClockFont();
     if (rotChanged) {
       applyOrientation(true);
       if (show.photos.length) setTimeout(function () { showPhoto(1); }, 300); // refit photo to the new shape
@@ -1390,10 +1465,11 @@
         if (show.photos.length) showPhoto(1);
         else toast(mode() === 'google' ? 'No photos yet — add a shared album link in the Apps Script' : 'Connect Google Photos in Settings first');
         break;
-      case 'refresh':
+      case 'refresh': // "Refresh now" in Settings: reload calendar, tasks, meals, groceries, weather and photos
+        closeModal();
         toast('Refreshing…');
         state.monthCache = {}; state.mealDates = {};
-        loadDashboard(); loadPhotos(false); loadWeather();
+        loadDashboard(); loadPhotos(true); loadWeather(); // Refresh re-reads the album too
         if (ui.page === 'month') loadMonth(true);
         if (ui.page === 'meals') ensureWeekLoaded();
         break;
@@ -1580,6 +1656,6 @@
 
   var rm = settings.refreshMinutes;
   setInterval(loadDashboard, Math.max(1, rm.dashboard || 3) * 60e3);
-  setInterval(function () { loadPhotos(false); }, Math.max(10, rm.photos || 360) * 60e3);
+  setInterval(function () { loadPhotos(true); }, Math.max(30, rm.photos || 180) * 60e3); // re-read the album for new photos
   setInterval(loadWeather, Math.max(10, rm.weather || 30) * 60e3);
 })();

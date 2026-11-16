@@ -98,7 +98,7 @@ body.on-month .scrim, body.on-meals .scrim { background: rgba(0, 0, 0, 0.55); }
 .hero { text-shadow: 0 0.15rem 1.6rem rgba(0, 0, 0, 0.45); }
 .greeting { font-size: 1.7rem; font-weight: 500; color: var(--muted); letter-spacing: 0.01em; }
 .clock {
-  font-family: Outfit, Manrope, sans-serif; font-weight: 200;
+  font-family: var(--clock-font, Outfit, Manrope, sans-serif); font-weight: var(--clock-weight, 200);
   font-size: 11rem; line-height: 0.95; letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums; margin-top: 0.4rem;
 }
@@ -229,7 +229,7 @@ body.on-month .scrim, body.on-meals .scrim { background: rgba(0, 0, 0, 0.55); }
 /* ---------- Photo mode ---------- */
 .mini-clock {
   position: fixed; right: var(--safe-x); bottom: var(--safe-y);
-  font-family: Outfit, Manrope, sans-serif; font-weight: 300; font-size: 3.6rem; line-height: 1;
+  font-family: var(--clock-font, Outfit, Manrope, sans-serif); font-weight: var(--clock-weight, 300); font-size: 3.6rem; line-height: 1;
   text-align: right; text-shadow: 0 0.15rem 1.4rem rgba(0,0,0,0.6);
   opacity: 0; transition: opacity 0.8s ease; pointer-events: none;
 }
@@ -337,7 +337,7 @@ body.on-month .scrim, body.on-meals .scrim { background: rgba(0, 0, 0, 0.55); }
 .head-actions { display: flex; gap: 0.6rem; margin-left: 0.8rem; }
 .head-actions .btn { padding: 0.7rem 1.2rem; font-size: 1.3rem; }
 .head-actions .ic { font-size: 1.6rem; }
-.page-clock { margin-left: auto; font-family: Outfit, Manrope, sans-serif; font-size: 2.4rem; font-weight: 300; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.page-clock { margin-left: auto; font-family: var(--clock-font, Outfit, Manrope, sans-serif); font-size: 2.4rem; font-weight: var(--clock-weight, 300); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ---------- Page 2: Month ---------- */
 .page-month { display: flex; }
@@ -487,3 +487,19 @@ body.mobile {
 .mobile .btn-row { flex-wrap: wrap; }
 .mobile .toast { bottom: 9rem; white-space: normal; text-align: center; max-width: 85vw; }
 .mobile .mt-day { justify-content: flex-start; }
+
+/* ---------- Clock font picker (Settings) ---------- */
+.seg.fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.seg.fonts .btn { flex-direction: column; gap: 0.2rem; padding: 0.7rem 0.6rem; }
+.fsample { font-size: 2.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.seg.fonts small { font-size: 1.05rem; font-weight: 600; color: var(--muted); }
+.mobile .seg.fonts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---------- To-do: Completed section ---------- */
+.todo-section {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  margin: 1rem 0.8rem 0.3rem; padding-top: 0.9rem; border-top: 1px solid var(--line);
+  font-size: 1.1rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+.todo-section span { font-size: 1.05rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--faint); }
+.btn-row .btn-left { margin-right: auto; }

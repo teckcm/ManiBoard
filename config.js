@@ -9,6 +9,7 @@ window.MANIBOARD_CONFIG = {
   weatherCity: '',       // e.g. 'London' — leave empty to hide weather
   tempUnit: 'celsius',   // 'celsius' | 'fahrenheit'
   use24h: false,
+  clockFont: 'outfit',   // 'outfit' | 'poppins' | 'bebas' | 'playfair' | 'mono' | 'manrope' (also in Settings on the TV)
   orientation: 'landscape', // 'landscape' | 'portrait-cw' | 'portrait-ccw' (TV mounted on its side)
   slideSeconds: 30,      // seconds per background photo
   defaultCalendar: 'Family', // new events go to the calendar with this name (falls back to your main calendar)
@@ -17,5 +18,5 @@ window.MANIBOARD_CONFIG = {
   nightDim: { enabled: true, from: 23, to: 6, opacity: 0.6 }, // dim the screen at night
   autoPhotoMinutes: 5,   // switch to photo mode after this many idle minutes (0 = off, 0.5 = 30 seconds)
   idleBlurSeconds: 40,  // hide the focus ring after this long without remote input
-  refreshMinutes: { dashboard: 3, photos: 360, weather: 30 },
+  refreshMinutes: { dashboard: 3, photos: 180, weather: 30 }, // photos: how often the album is re-read for new pictures
 };
