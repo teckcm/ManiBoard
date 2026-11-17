@@ -163,10 +163,14 @@
   }
   function openKeyboard(el) {
     if (el.getAttribute('inputmode') !== 'none') return false; // keyboard already allowed
-    el.blur();
+    el.blur(); // (this also resets inputmode to none via the focusout handler below)
     el.setAttribute('inputmode', el.getAttribute('data-im') || 'text');
-    el.focus();
-    try { var n = el.value.length; el.setSelectionRange(n, n); } catch (e) { /* not supported */ }
+    // Re-focus a moment later: on Android TV an instant blur+focus counts as "nothing
+    // happened" and the keyboard never appears.
+    setTimeout(function () {
+      el.focus();
+      try { var n = el.value.length; el.setSelectionRange(n, n); } catch (e) { /* not supported */ }
+    }, 80);
     return true;
   }
   // Leaving a text box switches its keyboard off again.
@@ -188,6 +192,10 @@
     var t = document.activeElement;
     var text = isTextField(t);
     if (hooks.activity) hooks.activity();
+    // Every OK press can be followed by an echo tap (Fully Kiosk) — swallow it, even when the
+    // page handled the key itself (e.g. OK leaving photo mode), or it clicks whatever is
+    // highlighted next, like the Photo mode button.
+    if (e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 23 || e.keyCode === 66) lastKeyActivate = Date.now();
 
     if (hooks.key && hooks.key(e, dir) === true) { e.preventDefault(); return; }
 

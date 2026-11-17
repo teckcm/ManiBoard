@@ -1419,7 +1419,7 @@
   }
 
   // ------------------------------------------------------------------ photo mode
-  var photoReturnFocus = null;
+  var photoReturnFocus = null, photoExitAt = 0;
   function enterPhotoMode(auto) {
     if (MOBILE || body.classList.contains('photo-mode')) return;
     photoReturnFocus = document.activeElement;
@@ -1427,7 +1427,7 @@
     Nav.blur();
     pushLayer('photo', function () {
       body.classList.remove('photo-mode');
-      lastActivity = Date.now(); // leaving photo mode restarts the auto-photo countdown
+      lastActivity = photoExitAt = Date.now(); // leaving photo mode restarts the auto-photo countdown
       if (photoReturnFocus && document.contains(photoReturnFocus)) Nav.focus(photoReturnFocus);
     });
     if (!auto && !show.photos.length) toast('No photos yet — showing the clock');
@@ -1460,7 +1460,7 @@
     if (!el) return;
     var a = el.getAttribute('data-action');
     switch (a) {
-      case 'photo-mode': enterPhotoMode(); break;
+      case 'photo-mode': if (Date.now() - photoExitAt > 1500) enterPhotoMode(); break; // ignore echo taps right after leaving photo mode
       case 'next-photo':
         if (show.photos.length) showPhoto(1);
         else toast(mode() === 'google' ? 'No photos yet — add a shared album link in the Apps Script' : 'Connect Google Photos in Settings first');
@@ -1535,7 +1535,7 @@
 
     // Auto photo mode after N minutes without input (0 = off). Not while a dialog is open.
     var autoMin = +settings.autoPhotoMinutes || 0;
-    if (autoMin > 0 && modal.hidden && !body.classList.contains('photo-mode') &&
+    if (autoMin > 0 && modal.hidden && !body.classList.contains('photo-mode') && Date.now() - photoExitAt > 10e3 &&
         Date.now() - lastActivity > autoMin * 60e3) {
       enterPhotoMode(true);
     }
